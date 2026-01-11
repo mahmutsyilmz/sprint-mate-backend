@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -59,6 +61,17 @@ public class User {
      */
     @Column(name = "bio", length = 255)
     private String bio;
+
+    /**
+     * User's tech stack / skills (e.g., "Java", "React", "Docker").
+     * Used for AI-driven project generation to create personalized project suggestions.
+     * Stored in a separate table (user_skills) via @ElementCollection.
+     */
+    @ElementCollection
+    @CollectionTable(name = "user_skills", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "skill")
+    @Builder.Default
+    private Set<String> skills = new HashSet<>();
 
     /**
      * Timestamp when user started waiting in the matching queue.

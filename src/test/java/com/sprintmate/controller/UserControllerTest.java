@@ -25,7 +25,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -73,7 +75,8 @@ class UserControllerTest {
             "Test User",
             "Tester",
             "FRONTEND",
-            null
+            null,
+            new HashSet<>()
         );
 
         // Create mock OAuth2User with GitHub attributes
@@ -97,7 +100,7 @@ class UserControllerTest {
             // Arrange
             RoleSelectionRequest request = new RoleSelectionRequest("FRONTEND");
             UserResponse userBeforeUpdate = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null, new HashSet<>()
             );
 
             when(userService.findByGithubUrl("https://github.com/testuser"))
@@ -125,10 +128,10 @@ class UserControllerTest {
             // Arrange
             RoleSelectionRequest request = new RoleSelectionRequest("BACKEND");
             UserResponse backendUser = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null, new HashSet<>()
             );
             UserResponse userBeforeUpdate = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null, new HashSet<>()
             );
 
             when(userService.findByGithubUrl("https://github.com/testuser"))
@@ -153,7 +156,7 @@ class UserControllerTest {
             // We need to test with a valid pattern but invalid service logic
             RoleSelectionRequest request = new RoleSelectionRequest("FRONTEND");
             UserResponse userBeforeUpdate = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null, new HashSet<>()
             );
 
             when(userService.findByGithubUrl("https://github.com/testuser"))
@@ -275,7 +278,7 @@ class UserControllerTest {
         void should_ReturnNullRole_When_UserHasNoRole() throws Exception {
             // Arrange
             UserResponse userWithNoRole = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", null, null, new HashSet<>()
             );
             when(userService.findByGithubUrl("https://github.com/testuser"))
                 .thenReturn(userWithNoRole);
@@ -296,12 +299,12 @@ class UserControllerTest {
         @DisplayName("should_Return200_When_ValidProfileUpdateProvided")
         void should_Return200_When_ValidProfileUpdateProvided() throws Exception {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Full-stack developer", null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Full-stack developer", null, null);
             UserResponse userBeforeUpdate = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null, new HashSet<>()
             );
             UserResponse updatedUser = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "FRONTEND", "Full-stack developer"
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "FRONTEND", "Full-stack developer", new HashSet<>()
             );
 
             when(userService.findByGithubUrl("https://github.com/testuser"))
@@ -326,12 +329,12 @@ class UserControllerTest {
         @DisplayName("should_Return200_When_BioIsNull")
         void should_Return200_When_BioIsNull() throws Exception {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", null, null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", null, null, null);
             UserResponse userBeforeUpdate = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null, new HashSet<>()
             );
             UserResponse updatedUser = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "FRONTEND", null
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "FRONTEND", null, new HashSet<>()
             );
 
             when(userService.findByGithubUrl("https://github.com/testuser"))
@@ -354,12 +357,12 @@ class UserControllerTest {
         @DisplayName("should_Return200_When_RoleUpdated")
         void should_Return200_When_RoleUpdated() throws Exception {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Backend expert", "BACKEND");
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Backend expert", "BACKEND", null);
             UserResponse userBeforeUpdate = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null, new HashSet<>()
             );
             UserResponse updatedUser = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "BACKEND", "Backend expert"
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "BACKEND", "Backend expert", new HashSet<>()
             );
 
             when(userService.findByGithubUrl("https://github.com/testuser"))
@@ -437,7 +440,7 @@ class UserControllerTest {
         @DisplayName("should_Return302_When_NotAuthenticated")
         void should_Return302_When_NotAuthenticated() throws Exception {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", null, null);
 
             // Act & Assert - No oauth2Login() = unauthenticated (redirects to login)
             mockMvc.perform(put("/api/users/me")
@@ -451,7 +454,7 @@ class UserControllerTest {
         @DisplayName("should_Return404_When_UserNotFound")
         void should_Return404_When_UserNotFound() throws Exception {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", null, null);
 
             when(userService.findByGithubUrl("https://github.com/testuser"))
                 .thenThrow(new ResourceNotFoundException("User", "githubUrl", "https://github.com/testuser"));

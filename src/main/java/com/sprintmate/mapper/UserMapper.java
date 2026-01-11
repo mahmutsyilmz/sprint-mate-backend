@@ -4,6 +4,8 @@ import com.sprintmate.dto.UserResponse;
 import com.sprintmate.model.User;
 import org.springframework.stereotype.Component;
 
+import java.util.HashSet;
+
 /**
  * Mapper for converting between User entity and DTOs.
  * 
@@ -18,6 +20,7 @@ public class UserMapper {
     /**
      * Converts User entity to UserResponse DTO.
      * Handles null role gracefully by returning null string.
+     * Returns a copy of skills set to prevent external modification.
      *
      * @param user The user entity to convert
      * @return UserResponse DTO with user data
@@ -29,7 +32,8 @@ public class UserMapper {
             user.getName(),
             user.getSurname(),
             user.getRole() != null ? user.getRole().name() : null,
-            user.getBio()
+            user.getBio(),
+            user.getSkills() != null ? new HashSet<>(user.getSkills()) : new HashSet<>()
         );
     }
 }

@@ -1,5 +1,6 @@
 package com.sprintmate.dto;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -15,6 +16,7 @@ import java.util.UUID;
  * @param surname   User's surname (may be null)
  * @param role      User's selected role (may be null if not yet selected)
  * @param bio       User's bio/title (may be null)
+ * @param skills    User's tech stack / skills (e.g., "Java", "React", "Docker")
  */
 public record UserResponse(
     UUID id,
@@ -22,5 +24,6 @@ public record UserResponse(
     String name,
     String surname,
     String role,
-    String bio
+    String bio,
+    Set<String> skills
 ) {}

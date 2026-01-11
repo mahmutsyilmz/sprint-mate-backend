@@ -8,6 +8,7 @@ A Spring Boot backend for matching frontend and backend developers for collabora
 - **GitHub OAuth2 Authentication** - Login via GitHub
 - **User Registration** - Automatic user sync on first login
 - **Role Selection API** - Users can select FRONTEND or BACKEND role
+- **User Skills/Tech Stack** - Store and update user skills (e.g., "Java", "React", "Docker")
 - **Project Templates API** - Browse available collaborative projects
 - **FIFO Matching Queue** - First-in-first-out matching system
   - Users join a waiting queue when no partner is available
@@ -19,8 +20,10 @@ A Spring Boot backend for matching frontend and backend developers for collabora
   - Users freed to search for new matches after completion
 - **Swagger UI** - Interactive API documentation
 - **File-based H2 Database** - Data persists between restarts
+- **AI Project Generator Placeholder** - Architecture ready for AI integration
 
 ### 📋 Pending
+- AI-driven project generation (OpenAI/Gemini integration)
 - Real Google Meet integration
 - Notification system
 
@@ -49,7 +52,8 @@ src/main/java/com/sprintmate/
 │   ├── ProjectController.java
 │   └── MatchController.java
 ├── dto/             # Request/Response DTOs
-│   ├── UserResponse.java
+│   ├── UserResponse.java          # Includes skills field
+│   ├── UserUpdateRequest.java     # Includes skills field
 │   ├── ProjectTemplateResponse.java
 │   ├── MatchStatusResponse.java
 │   ├── MatchCompletionRequest.java
@@ -58,7 +62,7 @@ src/main/java/com/sprintmate/
 ├── exception/       # Custom exceptions & global handler
 ├── mapper/          # Entity ↔ DTO mappers
 ├── model/           # JPA entities
-│   ├── User.java
+│   ├── User.java              # Includes skills (ElementCollection)
 │   ├── Match.java
 │   ├── MatchParticipant.java
 │   ├── MatchProject.java
@@ -67,7 +71,9 @@ src/main/java/com/sprintmate/
 └── service/         # Business logic
     ├── UserService.java
     ├── ProjectService.java
-    └── MatchService.java
+    ├── MatchService.java
+    ├── ProjectGeneratorService.java  # AI project generation interface
+    └── AiProjectGenerator.java       # AI integration placeholder
 ```
 
 ## 🚀 Getting Started
@@ -117,7 +123,8 @@ mvn spring-boot:run
 ### Users
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/users/me` | Get current user profile |
+| GET | `/api/users/me` | Get current user profile (includes skills) |
+| PUT | `/api/users/me` | Update user profile (name, bio, role, skills) |
 | PATCH | `/api/users/me/role` | Update user role (FRONTEND/BACKEND) |
 
 ### Projects
@@ -217,25 +224,61 @@ mvn test jacoco:report
 │ surname     │     │ participant_role    │     │ communication_  │
 │ github_url  │     └─────────────────────┘     │   link          │
 │ role        │                                 │ created_at      │
-│ waiting_    │     ┌─────────────────────┐     │ expires_at      │
-│   since     │     │   match_projects    │     └─────────────────┘
-└─────────────┘     ├─────────────────────┤            ▲
-                    │ match_id (FK)       │────────────┤
-                    │ project_template_   │            │
-                    │   id (FK)           │────►┌──────┴──────────┐
-                    │ start_date          │     │project_templates│
-                    │ end_date            │     ├─────────────────┤
-                    └─────────────────────┘     │ id (PK)         │
-                                                │ title           │
-                    ┌─────────────────────┐     │ description     │
-                    │ match_completions   │     └─────────────────┘
-                    ├─────────────────────┤
+│ bio         │     ┌─────────────────────┐     │ expires_at      │
+│ waiting_    │     │   match_projects    │     └─────────────────┘
+│   since     │     ├─────────────────────┤            ▲
+└──────┬──────┘     │ match_id (FK)       │────────────┤
+       │            │ project_template_   │            │
+       │            │   id (FK)           │────►┌──────┴──────────┐
+       ▼            │ start_date          │     │project_templates│
+┌─────────────┐     │ end_date            │     ├─────────────────┤
+│ user_skills │     └─────────────────────┘     │ id (PK)         │
+├─────────────┤                                 │ title           │
+│ user_id(FK) │     ┌─────────────────────┐     │ description     │
+│ skill       │     │ match_completions   │     └─────────────────┘
+└─────────────┘     ├─────────────────────┤
                     │ id (PK)             │
                     │ match_id (FK)       │─────► (references matches.id)
                     │ completed_at        │
                     │ repo_url            │
                     └─────────────────────┘
 ```
+
+## 🤖 AI Project Generation (Planned)
+
+The `AiProjectGenerator` service is a placeholder for future AI integration:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 AI PROJECT GENERATION FLOW                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Frontend User Skills: [React, TypeScript, Tailwind, Vite]  │
+│  Backend User Skills:  [Java, Spring Boot, PostgreSQL]      │
+│                    │                                         │
+│                    ▼                                         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Construct AI Prompt:                                  │   │
+│  │ "Create a 1-week project for these skills..."        │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                    │                                         │
+│                    ▼                                         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Call OpenAI/Gemini API                               │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                    │                                         │
+│                    ▼                                         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │ Parse JSON → ProjectTemplate                         │   │
+│  │ {title, description, frontendTasks, backendTasks}    │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Seeded Skills for Testing
+- **Frontend users**: React, TypeScript, Tailwind, Vite
+- **Backend users**: Java, Spring Boot, PostgreSQL, Docker
 
 ## 📄 License
 

@@ -120,6 +120,12 @@ public class UserService {
             user.setRole(role);
         }
 
+        // Update skills if provided (replaces old set with new one)
+        if (request.skills() != null) {
+            user.getSkills().clear();
+            user.getSkills().addAll(request.skills());
+        }
+
         User savedUser = userRepository.save(user);
 
         log.info("Updated profile for user {}", userId);

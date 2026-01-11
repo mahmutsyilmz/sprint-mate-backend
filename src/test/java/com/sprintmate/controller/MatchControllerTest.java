@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.UUID;
 
@@ -70,7 +71,8 @@ class MatchControllerTest {
             "Test User",
             "Tester",
             "FRONTEND",
-            null
+            null,
+            new HashSet<>()
         );
 
         matchedResponse = MatchStatusResponse.matched(

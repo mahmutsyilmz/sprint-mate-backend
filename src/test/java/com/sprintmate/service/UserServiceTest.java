@@ -17,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -64,7 +65,8 @@ class UserServiceTest {
             "Test User",
             "Tester",
             null,
-            null
+            null,
+            new HashSet<>()
         );
     }
 
@@ -77,7 +79,7 @@ class UserServiceTest {
         void should_UpdateRole_When_ValidRequest() {
             // Arrange
             UserResponse updatedResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null, new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -104,7 +106,7 @@ class UserServiceTest {
         void should_UpdateRole_When_BackendRoleProvided() {
             // Arrange
             UserResponse backendResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null, new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -124,7 +126,7 @@ class UserServiceTest {
         void should_UpdateRole_When_LowercaseRoleProvided() {
             // Arrange
             UserResponse frontendResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null, new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -184,7 +186,7 @@ class UserServiceTest {
             // Arrange
             testUser.setRole(RoleName.FRONTEND);
             UserResponse backendResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null, new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -210,7 +212,7 @@ class UserServiceTest {
             String githubUrl = "https://github.com/testuser";
             testUser.setRole(RoleName.FRONTEND);
             UserResponse frontendResponse = new UserResponse(
-                testUserId, githubUrl, "Test User", "Tester", "FRONTEND", null
+                testUserId, githubUrl, "Test User", "Tester", "FRONTEND", null, new HashSet<>()
             );
 
             when(userRepository.findByGithubUrl(githubUrl)).thenReturn(Optional.of(testUser));
@@ -270,9 +272,9 @@ class UserServiceTest {
         @DisplayName("should_UpdateProfile_When_ValidRequest")
         void should_UpdateProfile_When_ValidRequest() {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Full-stack developer", null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Full-stack developer", null, null);
             UserResponse updatedResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, "Full-stack developer"
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, "Full-stack developer", new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -297,9 +299,9 @@ class UserServiceTest {
         @DisplayName("should_UpdateProfile_When_BioIsNull")
         void should_UpdateProfile_When_BioIsNull() {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", null, null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", null, null, null);
             UserResponse updatedResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, null
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, null, new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -321,9 +323,9 @@ class UserServiceTest {
         @DisplayName("should_UpdateProfile_When_BioIsEmpty")
         void should_UpdateProfile_When_BioIsEmpty() {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "", null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "", null, null);
             UserResponse updatedResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, ""
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, "", new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -342,7 +344,7 @@ class UserServiceTest {
         void should_ThrowException_When_UserNotFound() {
             // Arrange
             UUID nonExistentUserId = UUID.randomUUID();
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", null, null);
             when(userRepository.findById(nonExistentUserId)).thenReturn(Optional.empty());
 
             // Act & Assert
@@ -359,9 +361,9 @@ class UserServiceTest {
         void should_PreserveRole_When_RoleNotProvided() {
             // Arrange
             testUser.setRole(RoleName.BACKEND);
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Backend expert", null);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Backend expert", null, null);
             UserResponse updatedResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "BACKEND", "Backend expert"
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "BACKEND", "Backend expert", new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -385,9 +387,9 @@ class UserServiceTest {
         void should_UpdateRole_When_RoleProvided() {
             // Arrange
             testUser.setRole(RoleName.BACKEND);
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Frontend expert", "FRONTEND");
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Frontend expert", "FRONTEND", null);
             UserResponse updatedResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "FRONTEND", "Frontend expert"
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "FRONTEND", "Frontend expert", new HashSet<>()
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -412,7 +414,7 @@ class UserServiceTest {
         @DisplayName("should_ThrowException_When_InvalidRoleProvided")
         void should_ThrowException_When_InvalidRoleProvided() {
             // Arrange
-            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", "INVALID_ROLE");
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", "INVALID_ROLE", null);
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
 

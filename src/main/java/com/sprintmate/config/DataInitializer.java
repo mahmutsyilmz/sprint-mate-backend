@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -134,6 +135,12 @@ public class DataInitializer implements CommandLineRunner {
             // Base time for queue ordering - older times = first in queue (FIFO)
             LocalDateTime baseTime = LocalDateTime.now().minusHours(1);
             
+            // Frontend skills for realistic AI project generation testing
+            Set<String> frontendSkills = Set.of("React", "TypeScript", "Tailwind", "Vite");
+            
+            // Backend skills for realistic AI project generation testing
+            Set<String> backendSkills = Set.of("Java", "Spring Boot", "PostgreSQL", "Docker");
+            
             // Create 5 Frontend developers (all waiting in queue with staggered times)
             for (int i = 1; i <= 5; i++) {
                 User frontendUser = User.builder()
@@ -142,6 +149,7 @@ public class DataInitializer implements CommandLineRunner {
                         .surname("Developer")
                         .githubUrl("https://github.com/fake_fe_" + i)
                         .role(RoleName.FRONTEND)
+                        .skills(new java.util.HashSet<>(frontendSkills))
                         // Stagger queue times: FE1 joined 60min ago, FE2 55min ago, etc.
                         .waitingSince(baseTime.plusMinutes((i - 1) * 5L))
                         .build();
@@ -154,8 +162,8 @@ public class DataInitializer implements CommandLineRunner {
                         .build();
                 userRoleRepository.save(userRole);
                 
-                logger.debug("Created frontend user: {} (waiting since {})", 
-                        savedFrontendUser.getName(), savedFrontendUser.getWaitingSince());
+                logger.debug("Created frontend user: {} with skills {} (waiting since {})", 
+                        savedFrontendUser.getName(), savedFrontendUser.getSkills(), savedFrontendUser.getWaitingSince());
             }
             
             // Create 5 Backend developers (all waiting in queue with staggered times)
@@ -166,6 +174,7 @@ public class DataInitializer implements CommandLineRunner {
                         .surname("Developer")
                         .githubUrl("https://github.com/fake_be_" + i)
                         .role(RoleName.BACKEND)
+                        .skills(new java.util.HashSet<>(backendSkills))
                         // Stagger queue times: BE1 joined 60min ago, BE2 55min ago, etc.
                         .waitingSince(baseTime.plusMinutes((i - 1) * 5L))
                         .build();
@@ -178,8 +187,8 @@ public class DataInitializer implements CommandLineRunner {
                         .build();
                 userRoleRepository.save(userRole);
                 
-                logger.debug("Created backend user: {} (waiting since {})", 
-                        savedBackendUser.getName(), savedBackendUser.getWaitingSince());
+                logger.debug("Created backend user: {} with skills {} (waiting since {})", 
+                        savedBackendUser.getName(), savedBackendUser.getSkills(), savedBackendUser.getWaitingSince());
             }
             
             // Create real user: Mahmut Sami Yılmaz (NOT in queue - will join when they click find match)
