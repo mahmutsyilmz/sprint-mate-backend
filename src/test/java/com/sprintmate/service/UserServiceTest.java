@@ -1,6 +1,7 @@
 package com.sprintmate.service;
 
 import com.sprintmate.dto.UserResponse;
+import com.sprintmate.dto.UserUpdateRequest;
 import com.sprintmate.exception.InvalidRoleException;
 import com.sprintmate.exception.ResourceNotFoundException;
 import com.sprintmate.mapper.UserMapper;
@@ -54,6 +55,7 @@ class UserServiceTest {
             .name("Test User")
             .surname("Tester")
             .role(null)
+            .bio(null)
             .build();
 
         testUserResponse = new UserResponse(
@@ -61,6 +63,7 @@ class UserServiceTest {
             "https://github.com/testuser",
             "Test User",
             "Tester",
+            null,
             null
         );
     }
@@ -74,7 +77,7 @@ class UserServiceTest {
         void should_UpdateRole_When_ValidRequest() {
             // Arrange
             UserResponse updatedResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND"
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -101,7 +104,7 @@ class UserServiceTest {
         void should_UpdateRole_When_BackendRoleProvided() {
             // Arrange
             UserResponse backendResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND"
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -121,7 +124,7 @@ class UserServiceTest {
         void should_UpdateRole_When_LowercaseRoleProvided() {
             // Arrange
             UserResponse frontendResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND"
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "FRONTEND", null
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -181,7 +184,7 @@ class UserServiceTest {
             // Arrange
             testUser.setRole(RoleName.FRONTEND);
             UserResponse backendResponse = new UserResponse(
-                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND"
+                testUserId, "https://github.com/testuser", "Test User", "Tester", "BACKEND", null
             );
 
             when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -207,7 +210,7 @@ class UserServiceTest {
             String githubUrl = "https://github.com/testuser";
             testUser.setRole(RoleName.FRONTEND);
             UserResponse frontendResponse = new UserResponse(
-                testUserId, githubUrl, "Test User", "Tester", "FRONTEND"
+                testUserId, githubUrl, "Test User", "Tester", "FRONTEND", null
             );
 
             when(userRepository.findByGithubUrl(githubUrl)).thenReturn(Optional.of(testUser));
@@ -256,6 +259,169 @@ class UserServiceTest {
 
             // Assert
             assertThat(result.role()).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("updateUserProfile Tests")
+    class UpdateUserProfileTests {
+
+        @Test
+        @DisplayName("should_UpdateProfile_When_ValidRequest")
+        void should_UpdateProfile_When_ValidRequest() {
+            // Arrange
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Full-stack developer", null);
+            UserResponse updatedResponse = new UserResponse(
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, "Full-stack developer"
+            );
+
+            when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+            when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(userMapper.toResponse(any(User.class))).thenReturn(updatedResponse);
+
+            // Act
+            UserResponse result = userService.updateUserProfile(testUserId, request);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.id()).isEqualTo(testUserId);
+            assertThat(result.name()).isEqualTo("Updated Name");
+            assertThat(result.bio()).isEqualTo("Full-stack developer");
+
+            verify(userRepository).findById(testUserId);
+            verify(userRepository).save(any(User.class));
+            verify(userMapper).toResponse(any(User.class));
+        }
+
+        @Test
+        @DisplayName("should_UpdateProfile_When_BioIsNull")
+        void should_UpdateProfile_When_BioIsNull() {
+            // Arrange
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", null, null);
+            UserResponse updatedResponse = new UserResponse(
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, null
+            );
+
+            when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+            when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(userMapper.toResponse(any(User.class))).thenReturn(updatedResponse);
+
+            // Act
+            UserResponse result = userService.updateUserProfile(testUserId, request);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.name()).isEqualTo("Updated Name");
+            assertThat(result.bio()).isNull();
+
+            verify(userRepository).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("should_UpdateProfile_When_BioIsEmpty")
+        void should_UpdateProfile_When_BioIsEmpty() {
+            // Arrange
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "", null);
+            UserResponse updatedResponse = new UserResponse(
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", null, ""
+            );
+
+            when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+            when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(userMapper.toResponse(any(User.class))).thenReturn(updatedResponse);
+
+            // Act
+            UserResponse result = userService.updateUserProfile(testUserId, request);
+
+            // Assert
+            assertThat(result.bio()).isEqualTo("");
+        }
+
+        @Test
+        @DisplayName("should_ThrowException_When_UserNotFound")
+        void should_ThrowException_When_UserNotFound() {
+            // Arrange
+            UUID nonExistentUserId = UUID.randomUUID();
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", null);
+            when(userRepository.findById(nonExistentUserId)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> userService.updateUserProfile(nonExistentUserId, request))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("User not found");
+
+            verify(userRepository).findById(nonExistentUserId);
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("should_PreserveRole_When_RoleNotProvided")
+        void should_PreserveRole_When_RoleNotProvided() {
+            // Arrange
+            testUser.setRole(RoleName.BACKEND);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Backend expert", null);
+            UserResponse updatedResponse = new UserResponse(
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "BACKEND", "Backend expert"
+            );
+
+            when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+            when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+                User savedUser = invocation.getArgument(0);
+                // Verify role was not changed during the update
+                assertThat(savedUser.getRole()).isEqualTo(RoleName.BACKEND);
+                return savedUser;
+            });
+            when(userMapper.toResponse(any(User.class))).thenReturn(updatedResponse);
+
+            // Act
+            UserResponse result = userService.updateUserProfile(testUserId, request);
+
+            // Assert
+            assertThat(result.role()).isEqualTo("BACKEND");
+        }
+
+        @Test
+        @DisplayName("should_UpdateRole_When_RoleProvided")
+        void should_UpdateRole_When_RoleProvided() {
+            // Arrange
+            testUser.setRole(RoleName.BACKEND);
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Frontend expert", "FRONTEND");
+            UserResponse updatedResponse = new UserResponse(
+                testUserId, "https://github.com/testuser", "Updated Name", "Tester", "FRONTEND", "Frontend expert"
+            );
+
+            when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+            when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+                User savedUser = invocation.getArgument(0);
+                // Verify role was changed during the update
+                assertThat(savedUser.getRole()).isEqualTo(RoleName.FRONTEND);
+                return savedUser;
+            });
+            when(userMapper.toResponse(any(User.class))).thenReturn(updatedResponse);
+
+            // Act
+            UserResponse result = userService.updateUserProfile(testUserId, request);
+
+            // Assert
+            assertThat(result.role()).isEqualTo("FRONTEND");
+            assertThat(result.name()).isEqualTo("Updated Name");
+            assertThat(result.bio()).isEqualTo("Frontend expert");
+        }
+
+        @Test
+        @DisplayName("should_ThrowException_When_InvalidRoleProvided")
+        void should_ThrowException_When_InvalidRoleProvided() {
+            // Arrange
+            UserUpdateRequest request = new UserUpdateRequest("Updated Name", "Bio", "INVALID_ROLE");
+
+            when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+
+            // Act & Assert
+            assertThatThrownBy(() -> userService.updateUserProfile(testUserId, request))
+                .isInstanceOf(InvalidRoleException.class)
+                .hasMessageContaining("Invalid role");
+
+            verify(userRepository, never()).save(any());
         }
     }
 }

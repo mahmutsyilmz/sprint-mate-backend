@@ -3,6 +3,7 @@ package com.sprintmate.controller;
 import com.sprintmate.constant.GitHubConstants;
 import com.sprintmate.dto.RoleSelectionRequest;
 import com.sprintmate.dto.UserResponse;
+import com.sprintmate.dto.UserUpdateRequest;
 import com.sprintmate.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -122,5 +123,61 @@ public class UserController {
 
         UserResponse user = userService.findByGithubUrl(githubUrl);
         return ResponseEntity.ok(user);
+    }
+
+    /**
+     * Updates the current user's profile.
+     * 
+     * Business Intent:
+     * Allows authenticated users to update their editable profile fields.
+     * Uses @AuthenticationPrincipal to ensure users can ONLY edit their own profile.
+     *
+     * @param request    The update request containing new profile values
+     * @param oauth2User The authenticated user from Spring Security context
+     * @return Updated user information
+     */
+    @PutMapping("/me")
+    @Operation(
+        summary = "Update current user's profile",
+        description = "Allows the authenticated user to update their profile details (name, bio, role). " +
+                      "Users can only update their own profile. Role is optional - if not provided, the existing role is preserved."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Profile updated successfully",
+            content = @Content(schema = @Schema(implementation = UserResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid input data (validation failed)",
+            content = @Content
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "User not authenticated",
+            content = @Content
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "User not found",
+            content = @Content
+        )
+    })
+    public ResponseEntity<UserResponse> updateMyProfile(
+            @Valid @RequestBody UserUpdateRequest request,
+            @AuthenticationPrincipal OAuth2User oauth2User) {
+
+        // Extract GitHub login from OAuth2 user and construct GitHub URL
+        String githubLogin = oauth2User.getAttribute("login");
+        String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
+
+        // Find user by GitHub URL to get their UUID
+        UserResponse currentUser = userService.findByGithubUrl(githubUrl);
+
+        // Update the profile
+        UserResponse updatedUser = userService.updateUserProfile(currentUser.id(), request);
+
+        return ResponseEntity.ok(updatedUser);
     }
 }

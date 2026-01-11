@@ -54,6 +54,13 @@ public class User {
     private RoleName role;
 
     /**
+     * User's bio/title (e.g., "Full-stack developer", "React enthusiast").
+     * Optional field for profile personalization.
+     */
+    @Column(name = "bio", length = 255)
+    private String bio;
+
+    /**
      * Timestamp when user started waiting in the matching queue.
      * Null means user is not currently waiting for a match.
      * Used for FIFO queue ordering - oldest waiting user gets matched first.

@@ -69,7 +69,8 @@ class MatchControllerTest {
             "https://github.com/testuser",
             "Test User",
             "Tester",
-            "FRONTEND"
+            "FRONTEND",
+            null
         );
 
         matchedResponse = MatchStatusResponse.matched(

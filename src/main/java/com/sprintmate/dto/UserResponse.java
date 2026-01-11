@@ -14,11 +14,13 @@ import java.util.UUID;
  * @param name      User's display name
  * @param surname   User's surname (may be null)
  * @param role      User's selected role (may be null if not yet selected)
+ * @param bio       User's bio/title (may be null)
  */
 public record UserResponse(
     UUID id,
     String githubUrl,
     String name,
     String surname,
-    String role
+    String role,
+    String bio
 ) {}

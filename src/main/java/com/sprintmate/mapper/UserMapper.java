@@ -28,7 +28,8 @@ public class UserMapper {
             user.getGithubUrl(),
             user.getName(),
             user.getSurname(),
-            user.getRole() != null ? user.getRole().name() : null
+            user.getRole() != null ? user.getRole().name() : null,
+            user.getBio()
         );
     }
 }

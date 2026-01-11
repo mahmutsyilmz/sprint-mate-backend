@@ -7,6 +7,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Security configuration for Sprint Mate application.
@@ -35,9 +43,14 @@ public class SecurityConfig {
      * @return Configured SecurityFilterChain
      * @throws Exception if configuration fails
      */
+    // Frontend URL for redirects after OAuth
+    private static final String FRONTEND_URL = "http://localhost:5174";
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+            // Enable CORS for cross-origin requests from frontend
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             // Configure URL-based authorization rules
             .authorizeHttpRequests(authorize -> authorize
                 // Public endpoints - accessible without authentication
@@ -53,6 +66,17 @@ public class SecurityConfig {
                 .userInfoEndpoint(userInfo -> userInfo
                     .userService(customOAuth2UserService)
                 )
+                // Redirect to frontend after successful login
+                .defaultSuccessUrl(FRONTEND_URL + "/role-select", true)
+            )
+            // Configure logout for API-based session management
+            // Returns HTTP 200 OK instead of redirecting - frontend handles routing
+            .logout(logout -> logout
+                .logoutUrl("/api/auth/logout")
+                .invalidateHttpSession(true)
+                .clearAuthentication(true)
+                .deleteCookies("JSESSIONID")
+                .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.OK))
             )
             // Disable CSRF for H2 console and API endpoints
             // API endpoints use session cookies for auth, but CSRF is disabled
@@ -66,5 +90,22 @@ public class SecurityConfig {
             );
 
         return http.build();
+    }
+
+    /**
+     * CORS configuration for frontend access.
+     * Allows the frontend origin to make cross-origin requests to the backend.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(FRONTEND_URL));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowCredentials(true); // Important for session cookies
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 }

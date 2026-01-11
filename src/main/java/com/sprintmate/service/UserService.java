@@ -1,6 +1,7 @@
 package com.sprintmate.service;
 
 import com.sprintmate.dto.UserResponse;
+import com.sprintmate.dto.UserUpdateRequest;
 import com.sprintmate.exception.InvalidRoleException;
 import com.sprintmate.exception.ResourceNotFoundException;
 import com.sprintmate.mapper.UserMapper;
@@ -83,6 +84,47 @@ public class UserService {
             .orElseThrow(() -> new ResourceNotFoundException("User", "githubUrl", githubUrl));
 
         return userMapper.toResponse(user);
+    }
+
+    /**
+     * Updates the profile of a user.
+     * 
+     * Business Intent:
+     * Allows users to update their editable profile fields (name, bio, role).
+     * Only updates allowed fields to prevent unauthorized changes.
+     *
+     * Flow:
+     * 1. Find user by ID (throw if not found)
+     * 2. Update allowed fields (name, bio, role if provided)
+     * 3. Persist changes
+     * 4. Return updated user as DTO
+     *
+     * @param userId  The UUID of the user to update
+     * @param request The update request containing new values
+     * @return UserResponse DTO with updated user data
+     * @throws ResourceNotFoundException if user does not exist
+     */
+    @Transactional
+    public UserResponse updateUserProfile(UUID userId, UserUpdateRequest request) {
+        // Find user or throw not found
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        // Update allowed fields
+        user.setName(request.name());
+        user.setBio(request.bio());
+        
+        // Update role if provided
+        if (request.role() != null && !request.role().isBlank()) {
+            RoleName role = parseRoleName(request.role());
+            user.setRole(role);
+        }
+
+        User savedUser = userRepository.save(user);
+
+        log.info("Updated profile for user {}", userId);
+
+        return userMapper.toResponse(savedUser);
     }
 
     /**
