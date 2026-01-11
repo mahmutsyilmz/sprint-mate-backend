@@ -3,6 +3,7 @@ package com.sprintmate.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -51,4 +52,12 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name = "role")
     private RoleName role;
+
+    /**
+     * Timestamp when user started waiting in the matching queue.
+     * Null means user is not currently waiting for a match.
+     * Used for FIFO queue ordering - oldest waiting user gets matched first.
+     */
+    @Column(name = "waiting_since")
+    private LocalDateTime waitingSince;
 }

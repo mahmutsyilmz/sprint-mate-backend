@@ -8,13 +8,19 @@ A Spring Boot backend for matching frontend and backend developers for collabora
 - **GitHub OAuth2 Authentication** - Login via GitHub
 - **User Registration** - Automatic user sync on first login
 - **Role Selection API** - Users can select FRONTEND or BACKEND role
+- **Project Templates API** - Browse available collaborative projects
+- **FIFO Matching Queue** - First-in-first-out matching system
+  - Users join a waiting queue when no partner is available
+  - Oldest waiting user gets matched first
+  - Cancel waiting feature
+- **Match Creation** - Automatic match with project assignment
 - **Swagger UI** - Interactive API documentation
 - **File-based H2 Database** - Data persists between restarts
 
 ### 📋 Pending
-- Match creation and management
-- Project assignment
 - Match completion flow
+- Real Google Meet integration
+- Notification system
 
 ## 🛠️ Tech Stack
 
@@ -28,20 +34,36 @@ A Spring Boot backend for matching frontend and backend developers for collabora
 | Lombok | Boilerplate reduction |
 | SpringDoc OpenAPI | Swagger UI |
 | JUnit 5 + Mockito | Testing |
+| spring-dotenv | .env file support |
 
 ## 📁 Project Structure
 
 ```
 src/main/java/com/sprintmate/
-├── config/          # Security, OpenAPI configuration
+├── config/          # Security, OpenAPI, DataInitializer
 ├── constant/        # Application constants
 ├── controller/      # REST API endpoints
+│   ├── UserController.java
+│   ├── ProjectController.java
+│   └── MatchController.java
 ├── dto/             # Request/Response DTOs
+│   ├── UserResponse.java
+│   ├── ProjectTemplateResponse.java
+│   ├── MatchStatusResponse.java
+│   └── ...
 ├── exception/       # Custom exceptions & global handler
 ├── mapper/          # Entity ↔ DTO mappers
 ├── model/           # JPA entities
+│   ├── User.java
+│   ├── Match.java
+│   ├── MatchParticipant.java
+│   ├── MatchProject.java
+│   └── ProjectTemplate.java
 ├── repository/      # Data access layer
 └── service/         # Business logic
+    ├── UserService.java
+    ├── ProjectService.java
+    └── MatchService.java
 ```
 
 ## 🚀 Getting Started
@@ -94,21 +116,76 @@ mvn spring-boot:run
 | GET | `/api/users/me` | Get current user profile |
 | PATCH | `/api/users/me/role` | Update user role (FRONTEND/BACKEND) |
 
+### Projects
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/projects` | Get all project templates |
+
+### Matches
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/matches/find` | Find match or join queue |
+| DELETE | `/api/matches/queue` | Leave the waiting queue |
+
+## 🎯 Matching Algorithm (FIFO Queue)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    MATCHING FLOW                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  User calls POST /api/matches/find                          │
+│                    │                                        │
+│                    ▼                                        │
+│  ┌─────────────────────────────────┐                       │
+│  │ Is there a waiting partner      │                       │
+│  │ with opposite role?             │                       │
+│  └─────────────────────────────────┘                       │
+│           │                │                                │
+│          YES              NO                                │
+│           │                │                                │
+│           ▼                ▼                                │
+│  ┌─────────────┐  ┌─────────────────────┐                  │
+│  │ MATCHED!    │  │ Join waiting queue  │                  │
+│  │             │  │ (set waitingSince)  │                  │
+│  │ - Match     │  │                     │                  │
+│  │ - Project   │  │ Return: WAITING     │                  │
+│  │ - Meet URL  │  │ with queue position │                  │
+│  └─────────────┘  └─────────────────────┘                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+Queue Order: FIFO (First In, First Out)
+- Oldest waiting user gets matched first
+- waitingSince timestamp determines order
+```
+
+### Example Flow
+```
+1. Frontend Dev A joins → No Backend waiting → A joins queue (WAITING)
+2. Frontend Dev B joins → No Backend waiting → B joins queue (WAITING)
+3. Backend Dev X joins → Frontend A is oldest → Match: X ↔ A (MATCHED)
+4. Frontend Dev C joins → No Backend waiting → C joins queue (WAITING)
+5. Backend Dev Y joins → Frontend B is oldest → Match: Y ↔ B (MATCHED)
+```
+
 ## 🧪 Testing
 
 ```bash
 # Run all tests
 mvn test
 
+# Run specific test class
+mvn test -Dtest=MatchServiceTest
+
 # Run with coverage
 mvn test jacoco:report
 ```
 
 ### Test Summary
-- **21 tests** total
-- Unit tests: `UserServiceTest` (10 tests)
-- Integration tests: `UserControllerTest` (10 tests)
-- Application context test (1 test)
+- **Unit tests**: `UserServiceTest`, `ProjectServiceTest`, `MatchServiceTest`
+- **Integration tests**: `UserControllerTest`, `ProjectControllerTest`, `MatchControllerTest`
+- **Data tests**: `DataInitializerTest`
 
 ## 📝 Configuration
 
@@ -123,6 +200,31 @@ mvn test jacoco:report
 2. Create new OAuth App
 3. Set Homepage URL: `http://localhost:8080`
 4. Set Callback URL: `http://localhost:8080/login/oauth2/code/github`
+
+## 🗃️ Database Schema
+
+```
+┌─────────────┐     ┌─────────────────────┐     ┌─────────────────┐
+│   users     │     │ match_participants  │     │    matches      │
+├─────────────┤     ├─────────────────────┤     ├─────────────────┤
+│ id (PK)     │◄────│ user_id (FK)        │     │ id (PK)         │
+│ name        │     │ match_id (FK)       │────►│ status          │
+│ surname     │     │ participant_role    │     │ communication_  │
+│ github_url  │     └─────────────────────┘     │   link          │
+│ role        │                                 │ created_at      │
+│ waiting_    │     ┌─────────────────────┐     │ expires_at      │
+│   since     │     │   match_projects    │     └─────────────────┘
+└─────────────┘     ├─────────────────────┤            ▲
+                    │ match_id (FK)       │────────────┘
+                    │ project_template_   │
+                    │   id (FK)           │────►┌─────────────────┐
+                    │ start_date          │     │project_templates│
+                    │ end_date            │     ├─────────────────┤
+                    └─────────────────────┘     │ id (PK)         │
+                                                │ title           │
+                                                │ description     │
+                                                └─────────────────┘
+```
 
 ## 📄 License
 

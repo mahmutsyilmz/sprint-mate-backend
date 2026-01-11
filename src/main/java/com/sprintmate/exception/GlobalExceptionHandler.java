@@ -57,6 +57,60 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles NoPartnerAvailableException - returns 404 Not Found.
+     * Used when the matching algorithm can't find a suitable partner.
+     *
+     * @param ex The exception that was thrown
+     * @return ResponseEntity with error details and 404 status
+     */
+    @ExceptionHandler(NoPartnerAvailableException.class)
+    public ResponseEntity<ApiError> handleNoPartnerAvailable(NoPartnerAvailableException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.NOT_FOUND.value(),
+            "Not Found",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    /**
+     * Handles ActiveMatchExistsException - returns 409 Conflict.
+     * Used when a user attempts to match while already in an active match.
+     *
+     * @param ex The exception that was thrown
+     * @return ResponseEntity with error details and 409 status
+     */
+    @ExceptionHandler(ActiveMatchExistsException.class)
+    public ResponseEntity<ApiError> handleActiveMatchExists(ActiveMatchExistsException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.CONFLICT.value(),
+            "Conflict",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    /**
+     * Handles RoleNotSelectedException - returns 400 Bad Request.
+     * Used when a user attempts to match without selecting a role first.
+     *
+     * @param ex The exception that was thrown
+     * @return ResponseEntity with error details and 400 status
+     */
+    @ExceptionHandler(RoleNotSelectedException.class)
+    public ResponseEntity<ApiError> handleRoleNotSelected(RoleNotSelectedException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**
      * Handles validation errors from @Valid annotations - returns 400 Bad Request.
      * Extracts field-level validation errors for detailed feedback.
      *
