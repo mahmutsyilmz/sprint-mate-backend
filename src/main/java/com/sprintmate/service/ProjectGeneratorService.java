@@ -8,25 +8,29 @@ import com.sprintmate.model.User;
  * 
  * Business Intent:
  * Defines the contract for generating personalized project templates
- * based on the combined skills of matched developers (Frontend + Backend).
+ * based on the combined skills of matched developers (Frontend + Backend)
+ * and an optional project topic (e.g., Fintech, Sports, AI).
  * 
- * Future implementations will integrate with AI models (OpenAI, Gemini, etc.)
+ * Implementations integrate with AI models (Gemini, OpenAI, etc.)
  * to create unique, skill-appropriate project suggestions for each match.
  */
 public interface ProjectGeneratorService {
 
     /**
-     * Generates a personalized project template based on the skills of two matched users.
+     * Generates a personalized project template based on the skills of two matched users
+     * and an optional topic preference.
      * 
      * The generated project should:
      * - Leverage the combined tech stack of both developers
      * - Be completable within a 1-week sprint
      * - Include clear frontend and backend responsibilities
      * - Provide learning opportunities for both participants
+     * - Align with the specified topic if provided
      *
      * @param frontendUser The user with FRONTEND role and their associated skills
      * @param backendUser  The user with BACKEND role and their associated skills
-     * @return A ProjectTemplate tailored to the combined skill sets
+     * @param topic        Optional topic for the project (e.g., "Fintech", "Sports", "AI")
+     * @return A ProjectTemplate tailored to the combined skill sets and topic
      */
-    ProjectTemplate generateProject(User frontendUser, User backendUser);
+    ProjectTemplate generateProject(User frontendUser, User backendUser, String topic);
 }

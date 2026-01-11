@@ -39,12 +39,22 @@ public class MatchService {
     private final MatchCompletionRepository matchCompletionRepository;
     private final UserRepository userRepository;
     private final ProjectService projectService;
+    private final ProjectGeneratorService projectGeneratorService;
 
     private static final String MOCK_MEETING_URL = "https://meet.google.com/mock-id";
     private static final int PROJECT_DURATION_DAYS = 7;
 
     /**
      * Finds or queues a match for the current user.
+     * Overload without topic - delegates to main method with null topic.
+     */
+    @Transactional
+    public MatchStatusResponse findOrQueueMatch(UUID currentUserId) {
+        return findOrQueueMatch(currentUserId, null);
+    }
+
+    /**
+     * Finds or queues a match for the current user with optional topic preference.
      * 
      * Business Logic (FIFO Queue):
      * 1. Check if user already has an active match → throw exception
@@ -53,6 +63,7 @@ public class MatchService {
      * 4. Look for oldest waiting partner with target role
      * 5. If partner found:
      *    - Create match atomically
+     *    - Generate AI project based on skills and topic
      *    - Clear both users' waitingSince
      *    - Return MATCHED status
      * 6. If no partner found:
@@ -60,13 +71,14 @@ public class MatchService {
      *    - Return WAITING status with queue position
      *
      * @param currentUserId The UUID of the user initiating the match
+     * @param topic         Optional topic for AI project generation (e.g., "Fintech", "Sports")
      * @return MatchStatusResponse with either MATCHED details or WAITING status
      * @throws ResourceNotFoundException if user not found
      * @throws RoleNotSelectedException if user hasn't selected a role
      * @throws ActiveMatchExistsException if user already has an active match
      */
     @Transactional
-    public MatchStatusResponse findOrQueueMatch(UUID currentUserId) {
+    public MatchStatusResponse findOrQueueMatch(UUID currentUserId, String topic) {
         // Step 1: Find the current user
         User currentUser = userRepository.findById(currentUserId)
             .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId));
@@ -95,7 +107,7 @@ public class MatchService {
             // Create the match (atomic transaction)
             Match match = createMatch();
             createParticipants(match, currentUser, partner);
-            MatchProject matchProject = assignProject(match);
+            MatchProject matchProject = assignProject(match, currentUser, partner, topic);
 
             // Clear waitingSince for both users (they're now matched)
             currentUser.setWaitingSince(null);
@@ -304,10 +316,29 @@ public class MatchService {
     }
 
     /**
-     * Assigns a random project template to the match.
+     * Assigns a project template to the match.
+     * Uses AI generation if topic is provided, falls back to random template.
+     * 
+     * @param match       The match to assign project to
+     * @param currentUser One of the matched users
+     * @param partner     The other matched user
+     * @param topic       Optional topic for AI generation
      */
-    private MatchProject assignProject(Match match) {
-        ProjectTemplate template = projectService.getRandomTemplate();
+    private MatchProject assignProject(Match match, User currentUser, User partner, String topic) {
+        ProjectTemplate template;
+        
+        // Determine frontend and backend users based on roles
+        User frontendUser = currentUser.getRole() == RoleName.FRONTEND ? currentUser : partner;
+        User backendUser = currentUser.getRole() == RoleName.BACKEND ? currentUser : partner;
+        
+        // Try AI generation first
+        template = projectGeneratorService.generateProject(frontendUser, backendUser, topic);
+        
+        // Fallback to random template if AI generation returns null
+        if (template == null) {
+            log.info("AI generation returned null, falling back to random template");
+            template = projectService.getRandomTemplate();
+        }
 
         MatchProject matchProject = MatchProject.builder()
             .match(match)

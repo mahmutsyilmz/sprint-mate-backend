@@ -97,6 +97,18 @@
             <artifactId>spring-dotenv</artifactId>
             <version>4.0.0</version>
         </dependency>
+
+        <!-- Spring Retry - For automatic retry on transient failures (e.g., 429 rate limits) -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+
+        <!-- Spring AOP - Required for @Retryable annotations -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

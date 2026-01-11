@@ -44,7 +44,7 @@ public class MatchController {
      * Initiates the matching process or joins the waiting queue.
      * 
      * Business Intent (FIFO Queue):
-     * - If a compatible partner is waiting → creates match immediately
+     * - If a compatible partner is waiting → creates match immediately with AI-generated project
      * - If no partner available → adds user to waiting queue
      * 
      * The queue follows FIFO principle - first user to wait gets matched first
@@ -56,6 +56,7 @@ public class MatchController {
      * - User must not have an existing active match
      *
      * @param oauth2User The authenticated user from Spring Security context
+     * @param topic      Optional project topic (e.g., "Fintech", "Sports", "AI")
      * @return MatchStatusResponse with either MATCHED details or WAITING status
      */
     @PostMapping("/find")
@@ -63,7 +64,8 @@ public class MatchController {
         summary = "Find a match or join queue",
         description = "Attempts to match the user with a compatible waiting partner. " +
                       "If no partner is available, the user joins the waiting queue (FIFO). " +
-                      "Returns MATCHED status with match details, or WAITING status with queue position."
+                      "Returns MATCHED status with match details, or WAITING status with queue position. " +
+                      "Optional 'topic' parameter influences AI-generated project theme."
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -87,7 +89,10 @@ public class MatchController {
             content = @Content
         )
     })
-    public ResponseEntity<MatchStatusResponse> findMatch(@AuthenticationPrincipal OAuth2User oauth2User) {
+    public ResponseEntity<MatchStatusResponse> findMatch(
+            @AuthenticationPrincipal OAuth2User oauth2User,
+            @Parameter(description = "Optional project topic (e.g., Fintech, Sports, AI, Healthcare)")
+            @RequestParam(required = false) String topic) {
         // Extract GitHub login from OAuth2 user and construct GitHub URL
         String githubLogin = oauth2User.getAttribute("login");
         String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
@@ -95,8 +100,8 @@ public class MatchController {
         // Find user by GitHub URL to get their UUID
         UserResponse currentUser = userService.findByGithubUrl(githubUrl);
 
-        // Initiate matching or join queue
-        MatchStatusResponse response = matchService.findOrQueueMatch(currentUser.id());
+        // Initiate matching or join queue with optional topic
+        MatchStatusResponse response = matchService.findOrQueueMatch(currentUser.id(), topic);
 
         return ResponseEntity.ok(response);
     }
