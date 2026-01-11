@@ -1,5 +1,7 @@
 package com.sprintmate.service;
 
+import com.sprintmate.dto.MatchCompletionRequest;
+import com.sprintmate.dto.MatchCompletionResponse;
 import com.sprintmate.dto.MatchResponse;
 import com.sprintmate.dto.MatchStatusResponse;
 import com.sprintmate.exception.ActiveMatchExistsException;
@@ -9,11 +11,13 @@ import com.sprintmate.model.*;
 import com.sprintmate.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -32,6 +36,7 @@ public class MatchService {
     private final MatchRepository matchRepository;
     private final MatchParticipantRepository matchParticipantRepository;
     private final MatchProjectRepository matchProjectRepository;
+    private final MatchCompletionRepository matchCompletionRepository;
     private final UserRepository userRepository;
     private final ProjectService projectService;
 
@@ -185,6 +190,70 @@ public class MatchService {
             status.projectTitle(),
             status.projectDescription()
         );
+    }
+
+    /**
+     * Completes an active match and saves the project repository URL.
+     * 
+     * Business Logic:
+     * 1. Verify match exists
+     * 2. Verify match status is ACTIVE
+     * 3. Security: Verify currentUserId is a participant in this match
+     * 4. Update match status to COMPLETED
+     * 5. Create and save MatchCompletion record
+     * 
+     * After completion, both users are free to search for new matches.
+     *
+     * @param matchId       The UUID of the match to complete
+     * @param request       The completion request with optional repo URL
+     * @param currentUserId The UUID of the user completing the match
+     * @return MatchCompletionResponse with completion details
+     * @throws ResourceNotFoundException if match not found
+     * @throws IllegalStateException if match is not in ACTIVE status
+     * @throws AccessDeniedException if currentUserId is not a participant
+     */
+    @Transactional
+    public MatchCompletionResponse completeMatch(UUID matchId, MatchCompletionRequest request, UUID currentUserId) {
+        // Step 1: Find the match
+        Match match = matchRepository.findById(matchId)
+            .orElseThrow(() -> new ResourceNotFoundException("Match", "id", matchId));
+
+        // Step 2: Verify match status is ACTIVE
+        if (match.getStatus() != MatchStatus.ACTIVE) {
+            throw new IllegalStateException(
+                String.format("Match %s cannot be completed. Current status: %s. Only ACTIVE matches can be completed.",
+                    matchId, match.getStatus())
+            );
+        }
+
+        // Step 3: Security check - verify user is a participant
+        List<MatchParticipant> participants = matchParticipantRepository.findByMatch(match);
+        boolean isParticipant = participants.stream()
+            .anyMatch(p -> p.getUser().getId().equals(currentUserId));
+
+        if (!isParticipant) {
+            log.warn("User {} attempted to complete match {} but is not a participant", currentUserId, matchId);
+            throw new AccessDeniedException(
+                String.format("User %s is not authorized to complete match %s", currentUserId, matchId)
+            );
+        }
+
+        // Step 4: Update match status to COMPLETED
+        match.setStatus(MatchStatus.COMPLETED);
+        matchRepository.save(match);
+
+        // Step 5: Create and save MatchCompletion record
+        LocalDateTime completedAt = LocalDateTime.now();
+        MatchCompletion completion = MatchCompletion.builder()
+            .match(match)
+            .repoUrl(request != null ? request.githubRepoUrl() : null)
+            .build();
+        matchCompletionRepository.save(completion);
+
+        log.info("Match {} completed by user {} with repo URL: {}", 
+                 matchId, currentUserId, request != null ? request.githubRepoUrl() : "none");
+
+        return MatchCompletionResponse.of(matchId, completedAt);
     }
 
     /**

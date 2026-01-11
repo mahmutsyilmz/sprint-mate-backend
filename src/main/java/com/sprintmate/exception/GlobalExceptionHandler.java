@@ -2,6 +2,7 @@ package com.sprintmate.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -101,6 +102,42 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(RoleNotSelectedException.class)
     public ResponseEntity<ApiError> handleRoleNotSelected(RoleNotSelectedException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**
+     * Handles AccessDeniedException - returns 403 Forbidden.
+     * Used when a user attempts to access a resource they don't have permission for.
+     *
+     * @param ex The exception that was thrown
+     * @return ResponseEntity with error details and 403 status
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.FORBIDDEN.value(),
+            "Forbidden",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    }
+
+    /**
+     * Handles IllegalStateException - returns 400 Bad Request.
+     * Used when an operation cannot be performed due to current state.
+     *
+     * @param ex The exception that was thrown
+     * @return ResponseEntity with error details and 400 status
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
         var error = new ApiError(
             LocalDateTime.now(),
             HttpStatus.BAD_REQUEST.value(),

@@ -14,11 +14,13 @@ A Spring Boot backend for matching frontend and backend developers for collabora
   - Oldest waiting user gets matched first
   - Cancel waiting feature
 - **Match Creation** - Automatic match with project assignment
+- **Match Completion** - Complete active matches with optional repo URL
+  - Security check ensures only participants can complete
+  - Users freed to search for new matches after completion
 - **Swagger UI** - Interactive API documentation
 - **File-based H2 Database** - Data persists between restarts
 
 ### 📋 Pending
-- Match completion flow
 - Real Google Meet integration
 - Notification system
 
@@ -50,6 +52,8 @@ src/main/java/com/sprintmate/
 │   ├── UserResponse.java
 │   ├── ProjectTemplateResponse.java
 │   ├── MatchStatusResponse.java
+│   ├── MatchCompletionRequest.java
+│   ├── MatchCompletionResponse.java
 │   └── ...
 ├── exception/       # Custom exceptions & global handler
 ├── mapper/          # Entity ↔ DTO mappers
@@ -126,6 +130,7 @@ mvn spring-boot:run
 |--------|----------|-------------|
 | POST | `/api/matches/find` | Find match or join queue |
 | DELETE | `/api/matches/queue` | Leave the waiting queue |
+|| POST | `/api/matches/{matchId}/complete` | Complete an active match |
 
 ## 🎯 Matching Algorithm (FIFO Queue)
 

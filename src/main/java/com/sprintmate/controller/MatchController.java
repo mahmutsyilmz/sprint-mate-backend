@@ -1,11 +1,14 @@
 package com.sprintmate.controller;
 
 import com.sprintmate.constant.GitHubConstants;
+import com.sprintmate.dto.MatchCompletionRequest;
+import com.sprintmate.dto.MatchCompletionResponse;
 import com.sprintmate.dto.MatchStatusResponse;
 import com.sprintmate.dto.UserResponse;
 import com.sprintmate.service.MatchService;
 import com.sprintmate.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -15,10 +18,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 /**
  * REST Controller for Match-related operations.
@@ -133,5 +135,74 @@ public class MatchController {
         matchService.cancelWaiting(currentUser.id());
 
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Completes an active match.
+     * 
+     * Business Intent:
+     * Marks a match as COMPLETED and optionally saves the project repository URL.
+     * After completion, both participants are freed to search for new matches.
+     * 
+     * Security:
+     * Only participants of the match can complete it.
+     *
+     * @param matchId The UUID of the match to complete
+     * @param request Optional request body with GitHub repo URL
+     * @param oauth2User The authenticated user from Spring Security context
+     * @return MatchCompletionResponse with completion details
+     */
+    @PostMapping("/{matchId}/complete")
+    @Operation(
+        summary = "Complete an active match",
+        description = "Marks the specified match as COMPLETED. " +
+                      "Optionally accepts a GitHub repository URL for the completed project. " +
+                      "After completion, both users are free to search for new matches. " +
+                      "Only participants of the match can complete it."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Match completed successfully",
+            content = @Content(schema = @Schema(implementation = MatchCompletionResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Match is not in ACTIVE status",
+            content = @Content
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "User not authenticated",
+            content = @Content
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "User is not a participant of this match",
+            content = @Content
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Match not found",
+            content = @Content
+        )
+    })
+    public ResponseEntity<MatchCompletionResponse> completeMatch(
+            @Parameter(description = "The UUID of the match to complete")
+            @PathVariable UUID matchId,
+            @RequestBody(required = false) MatchCompletionRequest request,
+            @AuthenticationPrincipal OAuth2User oauth2User) {
+
+        // Extract GitHub login from OAuth2 user and construct GitHub URL
+        String githubLogin = oauth2User.getAttribute("login");
+        String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
+
+        // Find user by GitHub URL to get their UUID
+        UserResponse currentUser = userService.findByGithubUrl(githubUrl);
+
+        // Complete the match
+        MatchCompletionResponse response = matchService.completeMatch(matchId, request, currentUser.id());
+
+        return ResponseEntity.ok(response);
     }
 }

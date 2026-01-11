@@ -1,5 +1,7 @@
 package com.sprintmate.service;
 
+import com.sprintmate.dto.MatchCompletionRequest;
+import com.sprintmate.dto.MatchCompletionResponse;
 import com.sprintmate.dto.MatchStatusResponse;
 import com.sprintmate.exception.ActiveMatchExistsException;
 import com.sprintmate.exception.ResourceNotFoundException;
@@ -15,8 +17,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -41,6 +45,9 @@ class MatchServiceTest {
 
     @Mock
     private MatchProjectRepository matchProjectRepository;
+
+    @Mock
+    private MatchCompletionRepository matchCompletionRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -364,6 +371,175 @@ class MatchServiceTest {
 
             // Assert - Partner name should be just the first name
             assertThat(result.partnerName()).isEqualTo("SingleName");
+        }
+    }
+
+    @Nested
+    @DisplayName("Complete Match Tests")
+    class CompleteMatchTests {
+
+        private UUID matchId;
+        private Match activeMatch;
+        private MatchParticipant frontendParticipant;
+        private MatchParticipant backendParticipant;
+
+        @BeforeEach
+        void setUpCompleteMatchTests() {
+            matchId = UUID.randomUUID();
+            activeMatch = Match.builder()
+                .id(matchId)
+                .status(MatchStatus.ACTIVE)
+                .communicationLink("https://meet.google.com/mock-id")
+                .build();
+
+            frontendParticipant = MatchParticipant.builder()
+                .id(UUID.randomUUID())
+                .match(activeMatch)
+                .user(frontendUser)
+                .participantRole(ParticipantRole.FRONTEND)
+                .build();
+
+            backendParticipant = MatchParticipant.builder()
+                .id(UUID.randomUUID())
+                .match(activeMatch)
+                .user(backendUser)
+                .participantRole(ParticipantRole.BACKEND)
+                .build();
+        }
+
+        @Test
+        @DisplayName("should_CompleteMatch_When_ValidParticipant")
+        void should_CompleteMatch_When_ValidParticipant() {
+            // Arrange
+            MatchCompletionRequest request = new MatchCompletionRequest("https://github.com/team/project");
+
+            when(matchRepository.findById(matchId)).thenReturn(Optional.of(activeMatch));
+            when(matchParticipantRepository.findByMatch(activeMatch))
+                .thenReturn(List.of(frontendParticipant, backendParticipant));
+            when(matchRepository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(matchCompletionRepository.save(any(MatchCompletion.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Act
+            MatchCompletionResponse result = matchService.completeMatch(matchId, request, frontendUserId);
+
+            // Assert
+            assertThat(result).isNotNull();
+            assertThat(result.matchId()).isEqualTo(matchId);
+            assertThat(result.status()).isEqualTo("COMPLETED");
+            assertThat(result.completedAt()).isNotNull();
+
+            // Verify match status was updated
+            ArgumentCaptor<Match> matchCaptor = ArgumentCaptor.forClass(Match.class);
+            verify(matchRepository).save(matchCaptor.capture());
+            assertThat(matchCaptor.getValue().getStatus()).isEqualTo(MatchStatus.COMPLETED);
+
+            // Verify completion record was created with repo URL
+            ArgumentCaptor<MatchCompletion> completionCaptor = ArgumentCaptor.forClass(MatchCompletion.class);
+            verify(matchCompletionRepository).save(completionCaptor.capture());
+            assertThat(completionCaptor.getValue().getRepoUrl()).isEqualTo("https://github.com/team/project");
+        }
+
+        @Test
+        @DisplayName("should_CompleteMatch_WithoutRepoUrl")
+        void should_CompleteMatch_WithoutRepoUrl() {
+            // Arrange - null request
+            when(matchRepository.findById(matchId)).thenReturn(Optional.of(activeMatch));
+            when(matchParticipantRepository.findByMatch(activeMatch))
+                .thenReturn(List.of(frontendParticipant, backendParticipant));
+            when(matchRepository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(matchCompletionRepository.save(any(MatchCompletion.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Act
+            MatchCompletionResponse result = matchService.completeMatch(matchId, null, frontendUserId);
+
+            // Assert
+            assertThat(result.status()).isEqualTo("COMPLETED");
+
+            // Verify completion record was created without repo URL
+            ArgumentCaptor<MatchCompletion> completionCaptor = ArgumentCaptor.forClass(MatchCompletion.class);
+            verify(matchCompletionRepository).save(completionCaptor.capture());
+            assertThat(completionCaptor.getValue().getRepoUrl()).isNull();
+        }
+
+        @Test
+        @DisplayName("should_ThrowAccessDenied_When_UserNotParticipant")
+        void should_ThrowAccessDenied_When_UserNotParticipant() {
+            // Arrange
+            UUID nonParticipantUserId = UUID.randomUUID();
+            MatchCompletionRequest request = new MatchCompletionRequest("https://github.com/team/project");
+
+            when(matchRepository.findById(matchId)).thenReturn(Optional.of(activeMatch));
+            when(matchParticipantRepository.findByMatch(activeMatch))
+                .thenReturn(List.of(frontendParticipant, backendParticipant));
+
+            // Act & Assert
+            assertThatThrownBy(() -> matchService.completeMatch(matchId, request, nonParticipantUserId))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("not authorized to complete match");
+
+            // Verify match was not updated
+            verify(matchRepository, never()).save(any());
+            verify(matchCompletionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("should_ThrowException_When_MatchAlreadyCompleted")
+        void should_ThrowException_When_MatchAlreadyCompleted() {
+            // Arrange
+            Match completedMatch = Match.builder()
+                .id(matchId)
+                .status(MatchStatus.COMPLETED)
+                .build();
+            MatchCompletionRequest request = new MatchCompletionRequest("https://github.com/team/project");
+
+            when(matchRepository.findById(matchId)).thenReturn(Optional.of(completedMatch));
+
+            // Act & Assert
+            assertThatThrownBy(() -> matchService.completeMatch(matchId, request, frontendUserId))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("cannot be completed")
+                .hasMessageContaining("COMPLETED");
+
+            // Verify no updates were made
+            verify(matchRepository, never()).save(any());
+            verify(matchCompletionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("should_ThrowException_When_MatchNotFound")
+        void should_ThrowException_When_MatchNotFound() {
+            // Arrange
+            UUID nonExistentMatchId = UUID.randomUUID();
+            MatchCompletionRequest request = new MatchCompletionRequest("https://github.com/team/project");
+
+            when(matchRepository.findById(nonExistentMatchId)).thenReturn(Optional.empty());
+
+            // Act & Assert
+            assertThatThrownBy(() -> matchService.completeMatch(nonExistentMatchId, request, frontendUserId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Match not found");
+        }
+
+        @Test
+        @DisplayName("should_AllowBothParticipants_ToCompleteMatch")
+        void should_AllowBothParticipants_ToCompleteMatch() {
+            // Arrange - Backend user completes
+            MatchCompletionRequest request = new MatchCompletionRequest("https://github.com/team/project");
+
+            when(matchRepository.findById(matchId)).thenReturn(Optional.of(activeMatch));
+            when(matchParticipantRepository.findByMatch(activeMatch))
+                .thenReturn(List.of(frontendParticipant, backendParticipant));
+            when(matchRepository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(matchCompletionRepository.save(any(MatchCompletion.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // Act - Backend user attempts to complete
+            MatchCompletionResponse result = matchService.completeMatch(matchId, request, backendUserId);
+
+            // Assert
+            assertThat(result.status()).isEqualTo("COMPLETED");
         }
     }
 }

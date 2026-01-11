@@ -1,5 +1,7 @@
 package com.sprintmate.controller;
 
+import com.sprintmate.dto.MatchCompletionRequest;
+import com.sprintmate.dto.MatchCompletionResponse;
 import com.sprintmate.dto.MatchStatusResponse;
 import com.sprintmate.dto.UserResponse;
 import com.sprintmate.exception.*;
@@ -14,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,6 +27,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oauth2Login;
@@ -228,6 +233,129 @@ class MatchControllerTest {
             // Act & Assert
             mockMvc.perform(delete("/api/matches/queue")
                     .with(csrf()))
+                .andExpect(status().isFound()); // 302 redirect to OAuth2 login
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/matches/{matchId}/complete Tests")
+    class CompleteMatchTests {
+
+        private UUID matchId;
+        private MatchCompletionResponse completionResponse;
+
+        @BeforeEach
+        void setUpCompleteMatchTests() {
+            matchId = UUID.randomUUID();
+            completionResponse = MatchCompletionResponse.of(matchId, LocalDateTime.now());
+        }
+
+        @Test
+        @DisplayName("should_Return200_When_MatchCompletedSuccessfully")
+        void should_Return200_When_MatchCompletedSuccessfully() throws Exception {
+            // Arrange
+            when(userService.findByGithubUrl("https://github.com/testuser"))
+                .thenReturn(testUserResponse);
+            when(matchService.completeMatch(eq(matchId), any(MatchCompletionRequest.class), eq(testUserId)))
+                .thenReturn(completionResponse);
+
+            // Act & Assert
+            mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
+                    .with(oauth2Login().oauth2User(mockOAuth2User))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"githubRepoUrl\": \"https://github.com/team/project\"}"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.matchId").value(matchId.toString()))
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.completedAt").exists());
+        }
+
+        @Test
+        @DisplayName("should_Return200_When_CompletedWithoutRepoUrl")
+        void should_Return200_When_CompletedWithoutRepoUrl() throws Exception {
+            // Arrange
+            when(userService.findByGithubUrl("https://github.com/testuser"))
+                .thenReturn(testUserResponse);
+            when(matchService.completeMatch(eq(matchId), any(), eq(testUserId)))
+                .thenReturn(completionResponse);
+
+            // Act & Assert - Empty body
+            mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
+                    .with(oauth2Login().oauth2User(mockOAuth2User))
+                    .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+        }
+
+        @Test
+        @DisplayName("should_Return403_When_UserNotParticipant")
+        void should_Return403_When_UserNotParticipant() throws Exception {
+            // Arrange
+            when(userService.findByGithubUrl("https://github.com/testuser"))
+                .thenReturn(testUserResponse);
+            when(matchService.completeMatch(eq(matchId), any(), eq(testUserId)))
+                .thenThrow(new AccessDeniedException("User is not authorized to complete match"));
+
+            // Act & Assert
+            mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
+                    .with(oauth2Login().oauth2User(mockOAuth2User))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"githubRepoUrl\": \"https://github.com/team/project\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").exists());
+        }
+
+        @Test
+        @DisplayName("should_Return400_When_MatchAlreadyCompleted")
+        void should_Return400_When_MatchAlreadyCompleted() throws Exception {
+            // Arrange
+            when(userService.findByGithubUrl("https://github.com/testuser"))
+                .thenReturn(testUserResponse);
+            when(matchService.completeMatch(eq(matchId), any(), eq(testUserId)))
+                .thenThrow(new IllegalStateException("Match cannot be completed. Current status: COMPLETED"));
+
+            // Act & Assert
+            mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
+                    .with(oauth2Login().oauth2User(mockOAuth2User))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"githubRepoUrl\": \"https://github.com/team/project\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").exists());
+        }
+
+        @Test
+        @DisplayName("should_Return404_When_MatchNotFound")
+        void should_Return404_When_MatchNotFound() throws Exception {
+            // Arrange
+            when(userService.findByGithubUrl("https://github.com/testuser"))
+                .thenReturn(testUserResponse);
+            when(matchService.completeMatch(eq(matchId), any(), eq(testUserId)))
+                .thenThrow(new ResourceNotFoundException("Match", "id", matchId));
+
+            // Act & Assert
+            mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
+                    .with(oauth2Login().oauth2User(mockOAuth2User))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"githubRepoUrl\": \"https://github.com/team/project\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+        }
+
+        @Test
+        @DisplayName("should_Return302_When_NotAuthenticated")
+        void should_Return302_When_NotAuthenticated() throws Exception {
+            // Act & Assert
+            mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"githubRepoUrl\": \"https://github.com/team/project\"}"))
                 .andExpect(status().isFound()); // 302 redirect to OAuth2 login
         }
     }
