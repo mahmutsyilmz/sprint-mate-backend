@@ -1,0 +1,70 @@
+package com.sprintmate.config;
+
+import com.sprintmate.service.CustomOAuth2UserService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Security configuration for Sprint Mate application.
+ * Configures GitHub OAuth2 authentication as the primary login mechanism.
+ * 
+ * MVP Strategy: Secure by default - all endpoints require authentication
+ * except explicitly whitelisted public paths (root, error pages, H2 console).
+ */
+@Configuration
+@EnableWebSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final CustomOAuth2UserService customOAuth2UserService;
+
+    /**
+     * Configures the security filter chain with OAuth2 login.
+     * 
+     * Business Intent:
+     * - Public access to root ("/") for health checks and landing page
+     * - Public access to error pages for proper error display to unauthenticated users
+     * - Public access to H2 console for development database inspection
+     * - All other endpoints require authentication via GitHub OAuth2
+     *
+     * @param http HttpSecurity builder
+     * @return Configured SecurityFilterChain
+     * @throws Exception if configuration fails
+     */
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            // Configure URL-based authorization rules
+            .authorizeHttpRequests(authorize -> authorize
+                // Public endpoints - accessible without authentication
+                .requestMatchers("/", "/error", "/h2-console/**").permitAll()
+                // Swagger UI endpoints - accessible for API documentation
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                // All other endpoints require authentication
+                .anyRequest().authenticated()
+            )
+            // Configure OAuth2 login with GitHub
+            .oauth2Login(oauth2 -> oauth2
+                // Use custom service to sync user data on successful login
+                .userInfoEndpoint(userInfo -> userInfo
+                    .userService(customOAuth2UserService)
+                )
+            )
+            // Disable CSRF for H2 console and API endpoints
+            // API endpoints use session cookies for auth, but CSRF is disabled
+            // because frontend and backend may run on different origins (CORS)
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/h2-console/**", "/api/**")
+            )
+            // Allow H2 console frames (development only)
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.sameOrigin())
+            );
+
+        return http.build();
+    }
+}

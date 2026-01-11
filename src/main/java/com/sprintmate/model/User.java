@@ -40,5 +40,15 @@ public class User {
     /**
      * User's last name.
      */
+    @Column(name = "surname", nullable = true)
     private String surname;
+
+    /**
+     * User's selected role (FRONTEND or BACKEND).
+     * Nullable until user explicitly selects a role after registration.
+     * Determines which type of developer they will be matched with.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role")
+    private RoleName role;
 }

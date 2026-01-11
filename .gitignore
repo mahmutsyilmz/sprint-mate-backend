@@ -27,8 +27,17 @@ Thumbs.db
 # Logs
 *.log
 
+# H2 Database files (local development data)
+data/
+*.mv.db
+*.trace.db
+
 # Cursor
 .cursor/
 
-# Documentation (local only)
-README.md
+# Environment files (contains secrets)
+.env
+.env.local
+
+# Documentation templates (not the main README)
+# README.md is tracked in git

@@ -50,4 +50,10 @@ public class Match {
      * Can be set based on business logic or left null for indefinite matches.
      */
     private LocalDateTime expiresAt;
+
+    /**
+     * Link for communication between the matched developers (e.g., Discord, Slack, email).
+     * Can be set by the system or users to facilitate collaboration.
+     */
+    private String communicationLink;
 }
