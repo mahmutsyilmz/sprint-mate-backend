@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -190,7 +191,7 @@ public class MatchController {
     public ResponseEntity<MatchCompletionResponse> completeMatch(
             @Parameter(description = "The UUID of the match to complete")
             @PathVariable UUID matchId,
-            @RequestBody(required = false) MatchCompletionRequest request,
+            @Valid @RequestBody(required = false) MatchCompletionRequest request,
             @AuthenticationPrincipal OAuth2User oauth2User) {
 
         // Extract GitHub login from OAuth2 user and construct GitHub URL

@@ -1,6 +1,7 @@
 package com.sprintmate.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * Request DTO for completing a match.
@@ -17,6 +18,10 @@ public record MatchCompletionRequest(
         description = "Optional GitHub repository URL for the completed project",
         example = "https://github.com/team/sprint-project",
         nullable = true
+    )
+    @Pattern(
+        regexp = "^$|^https?://.*",
+        message = "githubRepoUrl must be a valid URL starting with http:// or https://"
     )
     String githubRepoUrl
 ) {

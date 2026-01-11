@@ -243,17 +243,18 @@ public class MatchService {
         matchRepository.save(match);
 
         // Step 5: Create and save MatchCompletion record
+        String repoUrl = request != null ? request.githubRepoUrl() : null;
         LocalDateTime completedAt = LocalDateTime.now();
         MatchCompletion completion = MatchCompletion.builder()
             .match(match)
-            .repoUrl(request != null ? request.githubRepoUrl() : null)
+            .repoUrl(repoUrl)
             .build();
         matchCompletionRepository.save(completion);
 
         log.info("Match {} completed by user {} with repo URL: {}", 
-                 matchId, currentUserId, request != null ? request.githubRepoUrl() : "none");
+                 matchId, currentUserId, repoUrl != null ? repoUrl : "none");
 
-        return MatchCompletionResponse.of(matchId, completedAt);
+        return MatchCompletionResponse.of(matchId, completedAt, repoUrl);
     }
 
     /**

@@ -10,11 +10,13 @@ import java.util.UUID;
  * 
  * Business Intent:
  * Provides confirmation that a match has been successfully completed,
- * including the completion timestamp. Users are now free to search for new matches.
+ * including the completion timestamp and optional repository URL.
+ * Users are now free to search for new matches.
  *
  * @param matchId     The ID of the completed match
  * @param status      The new status of the match (COMPLETED)
  * @param completedAt Timestamp when the match was marked as completed
+ * @param repoUrl     The GitHub repository URL for the completed project (optional)
  */
 @Schema(description = "Response after successfully completing a match")
 public record MatchCompletionResponse(
@@ -25,12 +27,17 @@ public record MatchCompletionResponse(
     String status,
     
     @Schema(description = "Timestamp when the match was completed")
-    LocalDateTime completedAt
+    LocalDateTime completedAt,
+    
+    @Schema(description = "The GitHub repository URL for the completed project", 
+            example = "https://github.com/team/sprint-project",
+            nullable = true)
+    String repoUrl
 ) {
     /**
      * Creates a completion response for a successfully completed match.
      */
-    public static MatchCompletionResponse of(UUID matchId, LocalDateTime completedAt) {
-        return new MatchCompletionResponse(matchId, "COMPLETED", completedAt);
+    public static MatchCompletionResponse of(UUID matchId, LocalDateTime completedAt, String repoUrl) {
+        return new MatchCompletionResponse(matchId, "COMPLETED", completedAt, repoUrl);
     }
 }

@@ -411,7 +411,8 @@ class MatchServiceTest {
         @DisplayName("should_CompleteMatch_When_ValidParticipant")
         void should_CompleteMatch_When_ValidParticipant() {
             // Arrange
-            MatchCompletionRequest request = new MatchCompletionRequest("https://github.com/team/project");
+            String expectedRepoUrl = "https://github.com/team/project";
+            MatchCompletionRequest request = new MatchCompletionRequest(expectedRepoUrl);
 
             when(matchRepository.findById(matchId)).thenReturn(Optional.of(activeMatch));
             when(matchParticipantRepository.findByMatch(activeMatch))
@@ -428,6 +429,7 @@ class MatchServiceTest {
             assertThat(result.matchId()).isEqualTo(matchId);
             assertThat(result.status()).isEqualTo("COMPLETED");
             assertThat(result.completedAt()).isNotNull();
+            assertThat(result.repoUrl()).isEqualTo(expectedRepoUrl);
 
             // Verify match status was updated
             ArgumentCaptor<Match> matchCaptor = ArgumentCaptor.forClass(Match.class);
@@ -437,7 +439,7 @@ class MatchServiceTest {
             // Verify completion record was created with repo URL
             ArgumentCaptor<MatchCompletion> completionCaptor = ArgumentCaptor.forClass(MatchCompletion.class);
             verify(matchCompletionRepository).save(completionCaptor.capture());
-            assertThat(completionCaptor.getValue().getRepoUrl()).isEqualTo("https://github.com/team/project");
+            assertThat(completionCaptor.getValue().getRepoUrl()).isEqualTo(expectedRepoUrl);
         }
 
         @Test
@@ -456,6 +458,7 @@ class MatchServiceTest {
 
             // Assert
             assertThat(result.status()).isEqualTo("COMPLETED");
+            assertThat(result.repoUrl()).isNull();
 
             // Verify completion record was created without repo URL
             ArgumentCaptor<MatchCompletion> completionCaptor = ArgumentCaptor.forClass(MatchCompletion.class);

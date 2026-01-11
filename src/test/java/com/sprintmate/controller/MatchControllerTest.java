@@ -243,11 +243,13 @@ class MatchControllerTest {
 
         private UUID matchId;
         private MatchCompletionResponse completionResponse;
+        private MatchCompletionResponse completionResponseWithRepo;
 
         @BeforeEach
         void setUpCompleteMatchTests() {
             matchId = UUID.randomUUID();
-            completionResponse = MatchCompletionResponse.of(matchId, LocalDateTime.now());
+            completionResponse = MatchCompletionResponse.of(matchId, LocalDateTime.now(), null);
+            completionResponseWithRepo = MatchCompletionResponse.of(matchId, LocalDateTime.now(), "https://github.com/team/project");
         }
 
         @Test
@@ -257,7 +259,7 @@ class MatchControllerTest {
             when(userService.findByGithubUrl("https://github.com/testuser"))
                 .thenReturn(testUserResponse);
             when(matchService.completeMatch(eq(matchId), any(MatchCompletionRequest.class), eq(testUserId)))
-                .thenReturn(completionResponse);
+                .thenReturn(completionResponseWithRepo);
 
             // Act & Assert
             mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
@@ -269,7 +271,8 @@ class MatchControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.matchId").value(matchId.toString()))
                 .andExpect(jsonPath("$.status").value("COMPLETED"))
-                .andExpect(jsonPath("$.completedAt").exists());
+                .andExpect(jsonPath("$.completedAt").exists())
+                .andExpect(jsonPath("$.repoUrl").value("https://github.com/team/project"));
         }
 
         @Test
@@ -286,7 +289,8 @@ class MatchControllerTest {
                     .with(oauth2Login().oauth2User(mockOAuth2User))
                     .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("COMPLETED"));
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.repoUrl").doesNotExist());
         }
 
         @Test
@@ -357,6 +361,24 @@ class MatchControllerTest {
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"githubRepoUrl\": \"https://github.com/team/project\"}"))
                 .andExpect(status().isFound()); // 302 redirect to OAuth2 login
+        }
+
+        @Test
+        @DisplayName("should_Return400_When_InvalidRepoUrl")
+        void should_Return400_When_InvalidRepoUrl() throws Exception {
+            // Arrange
+            when(userService.findByGithubUrl("https://github.com/testuser"))
+                .thenReturn(testUserResponse);
+
+            // Act & Assert - Invalid URL format
+            mockMvc.perform(post("/api/matches/{matchId}/complete", matchId)
+                    .with(oauth2Login().oauth2User(mockOAuth2User))
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"githubRepoUrl\": \"not-a-valid-url\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Validation Failed"));
         }
     }
 }
