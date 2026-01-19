@@ -41,7 +41,7 @@ public class MatchService {
     private final ProjectService projectService;
     private final ProjectGeneratorService projectGeneratorService;
 
-    private static final String MOCK_MEETING_URL = "https://meet.google.com/mock-id";
+    private static final String TLKIO_BASE_URL = "https://tlk.io/sprintmate-";
     private static final int PROJECT_DURATION_DAYS = 7;
 
     /**
@@ -279,12 +279,22 @@ public class MatchService {
 
     /**
      * Creates a new Match record with ACTIVE status.
+     * Generates a unique tlk.io chat room URL for team communication.
      */
     private Match createMatch() {
         Match match = Match.builder()
             .status(MatchStatus.ACTIVE)
-            .communicationLink(MOCK_MEETING_URL)
             .build();
+
+        // Save first to get the generated Match ID
+        match = matchRepository.save(match);
+
+        // Generate unique tlk.io chat URL using first 8 chars of Match ID
+        String chatUrl = TLKIO_BASE_URL + match.getId().toString().substring(0, 8);
+        match.setCommunicationLink(chatUrl);
+
+        log.info("Generated tlk.io chat URL for match {}: {}", match.getId(), chatUrl);
+
         return matchRepository.save(match);
     }
 

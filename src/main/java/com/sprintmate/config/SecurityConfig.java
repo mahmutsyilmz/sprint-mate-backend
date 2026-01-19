@@ -44,7 +44,7 @@ public class SecurityConfig {
      * @throws Exception if configuration fails
      */
     // Frontend URL for redirects after OAuth
-    private static final String FRONTEND_URL = "http://localhost:5174";
+    private static final String FRONTEND_URL = "http://localhost:5173";
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

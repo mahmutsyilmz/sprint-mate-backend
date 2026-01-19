@@ -3,6 +3,7 @@ package com.sprintmate.controller;
 import com.sprintmate.constant.GitHubConstants;
 import com.sprintmate.dto.RoleSelectionRequest;
 import com.sprintmate.dto.UserResponse;
+import com.sprintmate.dto.UserStatusResponse;
 import com.sprintmate.dto.UserUpdateRequest;
 import com.sprintmate.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -123,6 +124,43 @@ public class UserController {
 
         UserResponse user = userService.findByGithubUrl(githubUrl);
         return ResponseEntity.ok(user);
+    }
+
+    /**
+     * Gets the current authenticated user's complete status including active match.
+     *
+     * Business Intent:
+     * Critical for session persistence - called on login/refresh to determine
+     * if user is in an active match and should be redirected to sprint view.
+     *
+     * @param oauth2User The authenticated user from Spring Security context
+     * @return Complete user status with active match details if applicable
+     */
+    @GetMapping("/me/status")
+    @Operation(
+        summary = "Get current user's status with active match info",
+        description = "Returns the complete status of the currently authenticated user, " +
+                      "including whether they have an active match and all match details. " +
+                      "Use this on login/refresh to restore user state."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Status retrieved successfully",
+            content = @Content(schema = @Schema(implementation = UserStatusResponse.class))
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "User not authenticated",
+            content = @Content
+        )
+    })
+    public ResponseEntity<UserStatusResponse> getMyStatus(@AuthenticationPrincipal OAuth2User oauth2User) {
+        String githubLogin = oauth2User.getAttribute("login");
+        String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
+
+        UserStatusResponse status = userService.getUserStatus(githubUrl);
+        return ResponseEntity.ok(status);
     }
 
     /**
