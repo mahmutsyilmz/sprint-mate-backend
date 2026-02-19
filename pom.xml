@@ -57,6 +57,12 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Spring WebSocket for real-time chat -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- Spring OAuth2 Client - Enables GitHub OAuth2 authentication -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

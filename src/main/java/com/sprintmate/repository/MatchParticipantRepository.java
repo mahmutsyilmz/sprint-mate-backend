@@ -22,4 +22,14 @@ public interface MatchParticipantRepository extends JpaRepository<MatchParticipa
      * @return List of match participants
      */
     List<MatchParticipant> findByMatch(Match match);
+
+    /**
+     * Checks if a user is a participant in a specific match.
+     * Used for chat access validation.
+     *
+     * @param matchId The match ID to check
+     * @param userId  The user ID to check
+     * @return true if the user is a participant in the match
+     */
+    boolean existsByMatchIdAndUserId(UUID matchId, UUID userId);
 }

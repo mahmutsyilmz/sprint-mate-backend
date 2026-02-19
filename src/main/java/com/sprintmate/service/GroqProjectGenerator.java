@@ -3,22 +3,21 @@ package com.sprintmate.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sprintmate.model.ProjectPromptContext;
+import com.sprintmate.model.ProjectIdea;
 import com.sprintmate.model.ProjectTemplate;
 import com.sprintmate.model.User;
-import com.sprintmate.repository.ProjectPromptContextRepository;
+import com.sprintmate.repository.ProjectIdeaRepository;
 import com.sprintmate.repository.ProjectTemplateRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,16 +27,11 @@ import java.util.Set;
 /**
  * Groq-powered implementation of ProjectGeneratorService.
  *
- * CRISIS MODE Implementation:
- * - Fetches random crisis scenarios from project_prompt_contexts table
- * - Merges crisis context with user skills for realistic project generation
- * - Key Rule: PROBLEM comes from DB, SOLUTION STACK comes from user skills
+ * NEW APPROACH: Fun, Portfolio-Worthy Projects
+ * Instead of stressful "crisis scenarios", we generate exciting mini-projects
+ * that developers would actually want to build and show off.
  *
  * Model: Llama-3.3-70b-versatile
- * Features:
- * - Extremely fast inference (LPU architecture)
- * - OpenAI-compatible API structure
- * - Native JSON mode support for reliable parsing
  */
 @Service
 @Primary
@@ -46,18 +40,16 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
 
     private final RestClient groqRestClient;
     private final ProjectTemplateRepository projectTemplateRepository;
-    private final ProjectPromptContextRepository promptContextRepository;
+    private final ProjectIdeaRepository projectIdeaRepository;
     private final ObjectMapper objectMapper;
 
-    // Groq's Llama 3 model (Best balance of speed and intelligence)
     private static final String MODEL_NAME = "llama-3.3-70b-versatile";
-    private static final String DEFAULT_TOPIC = "Web Application";
 
     public GroqProjectGenerator(
             @Value("${groq.api-key}") String apiKey,
             @Value("${groq.base-url}") String baseUrl,
             ProjectTemplateRepository projectTemplateRepository,
-            ProjectPromptContextRepository promptContextRepository,
+            ProjectIdeaRepository projectIdeaRepository,
             ObjectMapper objectMapper) {
 
         this.groqRestClient = RestClient.builder()
@@ -66,267 +58,178 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
                 .defaultHeader("Content-Type", "application/json")
                 .build();
         this.projectTemplateRepository = projectTemplateRepository;
-        this.promptContextRepository = promptContextRepository;
+        this.projectIdeaRepository = projectIdeaRepository;
         this.objectMapper = objectMapper;
 
-        log.info("GroqProjectGenerator initialized with model: {} (Crisis Mode enabled)", MODEL_NAME);
+        log.info("GroqProjectGenerator initialized with model: {}", MODEL_NAME);
     }
 
     @Override
-    public ProjectTemplate generateProject(User frontendUser, User backendUser, String topic) {
-        log.info("Generating AI project via Groq (Llama 3) - Crisis Mode");
+    public GeneratedProject generateProject(User frontendUser, User backendUser, String topic) {
+        log.info("Generating fun project for {} (FE) and {} (BE)",
+                frontendUser.getName(), backendUser.getName());
 
         try {
-            // Try to fetch a random crisis context for Crisis Mode
-            Optional<ProjectPromptContext> crisisContextOpt = fetchRandomCrisisContext();
+            // Try to fetch a random project idea
+            Optional<ProjectIdea> ideaOpt = fetchRandomProjectIdea();
+            ProjectIdea usedIdea = ideaOpt.orElse(null);
 
-            String systemPrompt;
-            if (crisisContextOpt.isPresent()) {
-                // CRISIS MODE: Use crisis scenario with user skills
-                ProjectPromptContext crisis = crisisContextOpt.get();
-                log.info("Crisis Mode activated - Industry: {}, Crisis: {}",
-                        crisis.getIndustry(), crisis.getCrisisCategory());
-                systemPrompt = buildCrisisModePrompt(crisis, frontendUser.getSkills(), backendUser.getSkills());
-            } else {
-                // Fallback to standard mode if no crisis contexts available
-                String effectiveTopic = (topic == null || topic.isBlank()) ? DEFAULT_TOPIC : topic;
-                log.info("No crisis context found, using standard mode with topic: {}", effectiveTopic);
-                systemPrompt = buildStandardPrompt(frontendUser.getSkills(), backendUser.getSkills(), effectiveTopic);
-            }
+            String systemPrompt = buildPrompt(
+                    frontendUser.getSkills(),
+                    backendUser.getSkills(),
+                    usedIdea
+            );
 
             String jsonResponse = callGroqApi(systemPrompt);
             ProjectTemplate template = parseGroqResponse(jsonResponse);
 
-            // Persist the generated template
             ProjectTemplate savedTemplate = projectTemplateRepository.save(template);
-            log.info("Successfully generated project: '{}'", savedTemplate.getTitle());
+            log.info("Generated project: '{}'", savedTemplate.getTitle());
 
-            return savedTemplate;
+            return new GeneratedProject(savedTemplate, usedIdea);
         } catch (Exception e) {
-            log.error("Groq generation failed, returning fallback template. Error: {}", e.getMessage());
-            return createFallbackTemplate(topic != null ? topic : DEFAULT_TOPIC);
+            log.error("Project generation failed: {}", e.getMessage());
+            return new GeneratedProject(createFallbackTemplate(), null);
         }
     }
 
     /**
-     * Fetches a random crisis context from the database.
-     * Uses pagination with random offset for database-agnostic random selection.
+     * Fetches a random project idea from the database.
      */
-    private Optional<ProjectPromptContext> fetchRandomCrisisContext() {
-        log.info("=== CRISIS MODE DEBUG START ===");
+    private Optional<ProjectIdea> fetchRandomProjectIdea() {
         try {
-            // First, get the total count
-            log.info("Attempting to count project_prompt_contexts...");
-            long totalCount = promptContextRepository.count();
-            log.info("Total crisis contexts in DB: {}", totalCount);
-
+            long totalCount = projectIdeaRepository.countActive();
             if (totalCount == 0) {
-                log.warn("No crisis contexts found in database, Crisis Mode unavailable");
+                log.info("No project ideas in database, using AI creativity");
                 return Optional.empty();
             }
 
-            // Generate a random offset
             Random random = new Random();
             int randomOffset = random.nextInt((int) totalCount);
-            log.info("Generated random offset: {} (out of {})", randomOffset, totalCount);
-
-            // Fetch one record at the random offset
-            log.info("Fetching page at offset {} with size 1...", randomOffset);
-            Page<ProjectPromptContext> page = promptContextRepository.findAllPaged(
-                PageRequest.of(randomOffset, 1)
+            Page<ProjectIdea> page = projectIdeaRepository.findAllActivePaged(
+                    PageRequest.of(randomOffset, 1)
             );
 
-            log.info("Page result - hasContent: {}, totalElements: {}, totalPages: {}",
-                page.hasContent(), page.getTotalElements(), page.getTotalPages());
-
             if (page.hasContent()) {
-                ProjectPromptContext context = page.getContent().get(0);
-                log.info("=== CRISIS CONTEXT FETCHED ===");
-                log.info("Industry: {}", context.getIndustry());
-                log.info("Sub-Domain: {}", context.getSubDomain());
-                log.info("Crisis Category: {}", context.getCrisisCategory());
-                log.info("Crisis Scenario: {}", context.getCrisisScenario());
-                log.info("=== END CRISIS CONTEXT ===");
-                return Optional.of(context);
+                ProjectIdea idea = page.getContent().get(0);
+                log.info("Selected project idea: {} ({})", idea.getName(), idea.getCategory());
+                return Optional.of(idea);
             }
-
-            log.warn("Page has no content despite count > 0");
             return Optional.empty();
         } catch (Exception e) {
-            log.error("=== CRISIS MODE FETCH FAILED ===");
-            log.error("Exception type: {}", e.getClass().getName());
-            log.error("Exception message: {}", e.getMessage());
-            log.error("Full stack trace:", e);
+            log.warn("Failed to fetch project idea: {}", e.getMessage());
             return Optional.empty();
         }
     }
 
     /**
-     * Builds a CRISIS MODE prompt that combines crisis scenario with user skills.
-     *
-     * KEY RULE: The PROBLEM comes from the crisis context,
-     * but the SOLUTION STACK comes from the user's skills - NEVER force a tech stack!
+     * Builds an exciting prompt that generates fun, portfolio-worthy projects.
      */
-    private String buildCrisisModePrompt(ProjectPromptContext crisis, Set<String> frontendSkills, Set<String> backendSkills) {
+    private String buildPrompt(Set<String> frontendSkills, Set<String> backendSkills, ProjectIdea idea) {
+        String ideaSection = "";
+        if (idea != null) {
+            ideaSection = """
+
+                PROJECT INSPIRATION (Use this as a starting point, but make it unique!):
+                Category: %s
+                Concept: %s
+                Pitch: %s
+                Key Features to Include: %s
+                Example Use Case: %s
+
+                """.formatted(
+                    idea.getCategory(),
+                    idea.getCoreConcept(),
+                    idea.getPitch(),
+                    idea.getKeyFeatures(),
+                    idea.getExampleUseCase() != null ? idea.getExampleUseCase() : "Be creative!"
+            );
+        }
+
         return """
-            You are a CTO acting in CRISIS MODE. A real emergency has hit the company and you need to mobilize your team IMMEDIATELY.
+            You are a creative tech mentor helping two developers build something AWESOME together.
+            Your job is to design a fun, achievable mini-project they can complete in 1 WEEK.
 
-            ═══════════════════════════════════════════════════════════════════
-            THE CRISIS CONTEXT
-            ═══════════════════════════════════════════════════════════════════
-            🏢 Industry: %s (%s)
-            🏗️ Company Stage: %s | Team Size: %s
-
-            🚨 CRISIS CATEGORY: %s
-            📋 THE SITUATION: %s
-
-            ⏰ Urgency Level: %s
-            📊 Stakeholder Pressure: %s
-
-            🎯 Success Metric: %s
-            ⏱️ Timeline: %s
-            💰 Budget: %s
-
-            🔧 Primary Constraint: %s
-            🔧 Secondary Constraint: %s
-
+            THE TEAM:
+            Frontend Developer knows: %s
+            Backend Developer knows: %s
             %s
-            %s
-            %s
+            DESIGN PRINCIPLES:
+            1. FUN FIRST - The project should be something developers are EXCITED to build
+            2. PORTFOLIO-WORTHY - Something they'd proudly show to recruiters
+            3. ACHIEVABLE - Must be completable in 1 week by 2 people
+            4. MODERN - Use their actual skills, no legacy technologies
+            5. COLLABORATIVE - Clear separation between frontend and backend work
+            6. REAL VALUE - Something that could actually be used by real people
 
-            ═══════════════════════════════════════════════════════════════════
-            YOUR TEAM (Use ONLY their skills - DO NOT suggest other technologies!)
-            ═══════════════════════════════════════════════════════════════════
-            👨‍💻 Frontend Developer Skills: %s
-            👩‍💻 Backend Developer Skills: %s
+            PROJECT REQUIREMENTS:
+            - 4-6 specific frontend tasks (UI components, state management, API integration)
+            - 4-6 specific backend tasks (APIs, database, business logic)
+            - 4-8 API endpoints with clear purposes
+            - The project should have a clear "wow factor" - something that impresses
 
-            CRITICAL RULE: You MUST design the solution using ONLY the skills listed above.
-            If the legacy system used Rust but your backend dev knows Java - use Java!
-            The team's existing skills are NON-NEGOTIABLE.
+            GOOD PROJECT EXAMPLES:
+            - A real-time collaborative todo app with live updates
+            - A mini social platform with posts, likes, and comments
+            - A personal finance tracker with charts and insights
+            - A recipe sharing app with search and favorites
+            - A quiz/trivia game with leaderboards
+            - A bookmark manager with tags and search
 
-            ═══════════════════════════════════════════════════════════════════
-            YOUR MISSION
-            ═══════════════════════════════════════════════════════════════════
-            Generate a CONCRETE project plan to solve this crisis using your team's skills.
+            BAD PROJECT EXAMPLES (AVOID THESE):
+            - Generic CRUD apps with no personality
+            - Enterprise systems or "crisis recovery" projects
+            - Anything requiring legacy tech (Classic ASP, COBOL, etc.)
+            - Projects that are too complex for 1 week
+            - Boring "database refactoring" or "connection pool optimization"
 
-            REQUIREMENTS:
-            1. The project title should reflect the crisis (e.g., "Emergency Patient Portal Recovery")
-            2. Tasks must be SPECIFIC and ACTIONABLE (no "Research" or "Plan" tasks)
-            3. Define exact API contracts that solve the business problem
-            4. Consider the constraints and compliance requirements
-            5. The solution must be achievable within the timeline
-
-            OUTPUT FORMAT (Strictly valid JSON only, no markdown):
+            OUTPUT FORMAT (Strictly valid JSON, no markdown):
             {
-              "title": "Crisis-Driven Project Name",
-              "description": "Executive summary of the crisis and technical solution approach.",
+              "title": "Catchy Project Name (e.g., 'SnapShare - Mini Photo Platform')",
+              "description": "2-3 sentence pitch that makes developers excited to build this",
+              "wowFactor": "What makes this project impressive (1 sentence)",
               "frontendTasks": [
-                "Specific UI/UX task addressing the crisis",
-                "Specific integration task",
-                "Specific feature task",
-                "Specific task"
+                "Specific task with technology (e.g., 'Build responsive feed UI with infinite scroll using React')",
+                "Another specific task",
+                "..."
               ],
               "backendTasks": [
-                "Specific API/service task addressing the crisis",
-                "Specific data layer task",
-                "Specific security/compliance task",
-                "Specific task"
+                "Specific task with technology (e.g., 'Implement JWT auth with refresh tokens in Spring Boot')",
+                "Another specific task",
+                "..."
               ],
               "apiEndpoints": [
-                { "method": "POST", "path": "/api/v1/endpoint", "description": "Purpose related to crisis" },
-                { "method": "GET", "path": "/api/v1/endpoint", "description": "Purpose related to crisis" }
+                { "method": "POST", "path": "/api/auth/login", "description": "User login, returns JWT" },
+                { "method": "GET", "path": "/api/posts", "description": "Get paginated feed" },
+                "..."
               ]
             }
             """.formatted(
-                crisis.getIndustry(),
-                crisis.getSubDomain() != null ? crisis.getSubDomain() : "General",
-                crisis.getCompanyStage() != null ? crisis.getCompanyStage() : "Unknown",
-                crisis.getTeamSize() != null ? crisis.getTeamSize() : "Small",
-                crisis.getCrisisCategory() != null ? crisis.getCrisisCategory() : "System Failure",
-                crisis.getCrisisScenario() != null ? crisis.getCrisisScenario() : "Critical system requires immediate replacement",
-                crisis.getUrgencyLevel() != null ? crisis.getUrgencyLevel() : "High",
-                crisis.getStakeholderPressure() != null ? crisis.getStakeholderPressure() : "Management expecting quick resolution",
-                crisis.getSuccessMetric() != null ? crisis.getSuccessMetric() : "System operational",
-                crisis.getTimeline() != null ? crisis.getTimeline() : "1 week",
-                crisis.getBudgetConstraint() != null ? crisis.getBudgetConstraint() : "Limited",
-                crisis.getPrimaryConstraint() != null ? crisis.getPrimaryConstraint() : "Time",
-                crisis.getSecondaryConstraint() != null ? crisis.getSecondaryConstraint() : "Resources",
-                crisis.getLegacySystemIssue() != null ? "🏚️ Legacy Issue: " + crisis.getLegacySystemIssue() : "",
-                crisis.getComplianceRequirement() != null ? "📜 Compliance: " + crisis.getComplianceRequirement() : "",
-                crisis.getIntegrationChallenge() != null ? "🔗 Integration Challenge: " + crisis.getIntegrationChallenge() : "",
-                frontendSkills,
-                backendSkills
+                frontendSkills.isEmpty() ? "React, TypeScript, CSS" : frontendSkills,
+                backendSkills.isEmpty() ? "Java, Spring Boot, PostgreSQL" : backendSkills,
+                ideaSection
         );
     }
 
-    /**
-     * Builds a standard prompt for when no crisis context is available.
-     * This is the fallback mode.
-     */
-    private String buildStandardPrompt(Set<String> frontendSkills, Set<String> backendSkills, String topic) {
-        return """
-            You are a strict Senior Technical Architect assigning a high-level sprint to a Frontend and Backend pair.
-
-            CONTEXT:
-            - Project Topic: %s
-            - Frontend Stack: %s
-            - Backend Stack: %s
-
-            REQUIREMENTS:
-            1. DO NOT include generic tasks like "Research" or "Plan".
-            2. DEFINE specific technical tasks (e.g., "Create 'users' table with UUID", "Implement JWT Filter").
-            3. DEFINE the exact API Contract (Endpoints, Methods).
-            4. The project must be complex enough for 1 week (e.g., include Pagination, Sorting, or File Upload).
-
-            OUTPUT FORMAT:
-            Strictly valid JSON only. No markdown. Structure:
-            {
-              "title": "Professional Project Name",
-              "description": "Technical summary of the architecture and goals.",
-              "frontendTasks": [
-                "Detailed Task 1 (e.g., Integrate POST /api/login with Axios)",
-                "Detailed Task 2",
-                "Detailed Task 3",
-                "Detailed Task 4"
-              ],
-              "backendTasks": [
-                "Detailed Task 1 (e.g., Implement POST /api/orders with Transaction management)",
-                "Detailed Task 2",
-                "Detailed Task 3",
-                "Detailed Task 4"
-              ],
-              "apiEndpoints": [
-                { "method": "POST", "path": "/api/v1/resource", "description": "Short purpose" },
-                { "method": "GET", "path": "/api/v1/resource/{id}", "description": "Short purpose" },
-                { "method": "GET", "path": "/api/v1/resource", "description": "Pagination & Filtering" }
-              ]
-            }
-            """.formatted(topic, frontendSkills, backendSkills);
-    }
-
     @Retryable(
-        retryFor = { HttpClientErrorException.TooManyRequests.class },
-        maxAttempts = 3,
-        backoff = @Backoff(delay = 1000, multiplier = 2)
+            retryFor = {HttpClientErrorException.TooManyRequests.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2)
     )
     protected String callGroqApi(String systemPrompt) {
-        // Prepare Request DTO
         GroqRequest request = new GroqRequest(
-            MODEL_NAME,
-            List.of(new Message("system", systemPrompt)),
-            new ResponseFormat("json_object") // Enforce JSON mode
+                MODEL_NAME,
+                List.of(new Message("system", systemPrompt)),
+                new ResponseFormat("json_object")
         );
 
         try {
             String requestBody = objectMapper.writeValueAsString(request);
-            
-            // Execute Call
-            String responseBody = groqRestClient.post()
+
+            return groqRestClient.post()
                     .body(requestBody)
                     .retrieve()
                     .body(String.class);
-            
-            return responseBody;
 
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize Groq request", e);
@@ -334,17 +237,13 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
     }
 
     private ProjectTemplate parseGroqResponse(String responseBody) throws JsonProcessingException {
-        // Parse the outer Groq response
         GroqResponse response = objectMapper.readValue(responseBody, GroqResponse.class);
-        
+
         if (response.choices == null || response.choices.isEmpty()) {
             throw new RuntimeException("Groq returned no choices");
         }
 
-        // Get the content string (which is the JSON project plan)
         String contentJson = response.choices.get(0).message.content;
-
-        // Parse the inner Project JSON
         JsonNode projectNode = objectMapper.readTree(contentJson);
 
         return ProjectTemplate.builder()
@@ -356,24 +255,29 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
     private String buildDescription(JsonNode projectJson) {
         StringBuilder sb = new StringBuilder();
 
-        // 1. Technical Summary
+        // Project pitch
         sb.append(projectJson.path("description").asText()).append("\n\n");
 
-        // 2. API Contract (The most important part)
+        // Wow factor
+        String wowFactor = projectJson.path("wowFactor").asText();
+        if (!wowFactor.isBlank()) {
+            sb.append("✨ What makes this special: ").append(wowFactor).append("\n\n");
+        }
+
+        // API Contract
         JsonNode apiEndpoints = projectJson.path("apiEndpoints");
         if (apiEndpoints.isArray() && !apiEndpoints.isEmpty()) {
-            sb.append("📡 API Contract (Core Endpoints):\n");
+            sb.append("📡 API Contract:\n");
             for (JsonNode api : apiEndpoints) {
                 String method = api.path("method").asText();
                 String path = api.path("path").asText();
                 String desc = api.path("description").asText();
-                // Format: [POST] /api/v1/login - Returns JWT Token
                 sb.append(String.format("• [%s] %s - %s\n", method, path, desc));
             }
             sb.append("\n");
         }
 
-        // 3. Frontend Specifics
+        // Frontend Tasks
         JsonNode frontendTasks = projectJson.path("frontendTasks");
         if (frontendTasks.isArray() && !frontendTasks.isEmpty()) {
             sb.append("🎨 Frontend Tasks:\n");
@@ -381,7 +285,7 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
             sb.append("\n");
         }
 
-        // 4. Backend Specifics
+        // Backend Tasks
         JsonNode backendTasks = projectJson.path("backendTasks");
         if (backendTasks.isArray() && !backendTasks.isEmpty()) {
             sb.append("⚙️ Backend Tasks:\n");
@@ -391,22 +295,40 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
         return sb.toString();
     }
 
-    private ProjectTemplate createFallbackTemplate(String topic) {
+    private ProjectTemplate createFallbackTemplate() {
         return projectTemplateRepository.save(ProjectTemplate.builder()
-                .title("Collaborative " + topic + " Project (Fallback)")
-                .description("AI Generation failed. Please proceed with a standard " + topic + " MVP structure.\n" +
-                        "\nFrontend: Setup UI/UX and API integration.\nBackend: Setup Database and REST API.")
+                .title("Collaborative Mini Project")
+                .description("""
+                        Build a simple but impressive web application together!
+
+                        ✨ What makes this special: You get to decide the direction!
+
+                        📡 Suggested API Contract:
+                        • [POST] /api/auth/register - User registration
+                        • [POST] /api/auth/login - User login with JWT
+                        • [GET] /api/items - List items with pagination
+                        • [POST] /api/items - Create new item
+                        • [GET] /api/items/{id} - Get item details
+
+                        🎨 Frontend Tasks:
+                        • Build login/register forms with validation
+                        • Create main dashboard with item listing
+                        • Implement create/edit item modal
+                        • Add responsive navigation
+
+                        ⚙️ Backend Tasks:
+                        • Set up JWT authentication
+                        • Create database schema for items
+                        • Implement CRUD REST APIs
+                        • Add pagination and filtering
+                        """)
                 .build());
     }
 
-    // =================================================================
-    // DTOs for OpenAI-Compatible API (Groq uses this format)
-    // =================================================================
-
+    // DTOs for Groq API
     private record GroqRequest(String model, List<Message> messages, ResponseFormat response_format) {}
     private record Message(String role, String content) {}
     private record ResponseFormat(String type) {}
-
     private record GroqResponse(List<Choice> choices) {}
     private record Choice(Message message) {}
 }

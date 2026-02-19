@@ -148,6 +148,24 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles ReadmeNotFoundException - returns 404 Not Found.
+     * Used when a README.md cannot be fetched from a GitHub repository.
+     *
+     * @param ex The exception that was thrown
+     * @return ResponseEntity with error details and 404 status
+     */
+    @ExceptionHandler(ReadmeNotFoundException.class)
+    public ResponseEntity<ApiError> handleReadmeNotFound(ReadmeNotFoundException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.NOT_FOUND.value(),
+            "README Not Found",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    /**
      * Handles validation errors from @Valid annotations - returns 400 Bad Request.
      * Extracts field-level validation errors for detailed feedback.
      *

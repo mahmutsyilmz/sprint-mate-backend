@@ -7,7 +7,16 @@ import com.sprintmate.dto.MatchStatusResponse;
 import com.sprintmate.exception.ActiveMatchExistsException;
 import com.sprintmate.exception.ResourceNotFoundException;
 import com.sprintmate.exception.RoleNotSelectedException;
-import com.sprintmate.model.*;
+import com.sprintmate.model.Match;
+import com.sprintmate.model.MatchCompletion;
+import com.sprintmate.model.MatchParticipant;
+import com.sprintmate.model.MatchProject;
+import com.sprintmate.model.MatchStatus;
+import com.sprintmate.model.ParticipantRole;
+import com.sprintmate.model.ProjectIdea;
+import com.sprintmate.model.ProjectTemplate;
+import com.sprintmate.model.RoleName;
+import com.sprintmate.model.User;
 import com.sprintmate.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,8 +49,8 @@ public class MatchService {
     private final UserRepository userRepository;
     private final ProjectService projectService;
     private final ProjectGeneratorService projectGeneratorService;
+    private final SprintReviewService sprintReviewService;
 
-    private static final String TLKIO_BASE_URL = "https://tlk.io/sprintmate-";
     private static final int PROJECT_DURATION_DAYS = 7;
 
     /**
@@ -205,21 +214,22 @@ public class MatchService {
     }
 
     /**
-     * Completes an active match and saves the project repository URL.
-     * 
+     * Completes an active match and generates AI sprint review.
+     *
      * Business Logic:
      * 1. Verify match exists
      * 2. Verify match status is ACTIVE
      * 3. Security: Verify currentUserId is a participant in this match
      * 4. Update match status to COMPLETED
      * 5. Create and save MatchCompletion record
-     * 
+     * 6. Generate AI sprint review if repo URL provided
+     *
      * After completion, both users are free to search for new matches.
      *
      * @param matchId       The UUID of the match to complete
-     * @param request       The completion request with optional repo URL
+     * @param request       The completion request with GitHub repo URL
      * @param currentUserId The UUID of the user completing the match
-     * @return MatchCompletionResponse with completion details
+     * @return MatchCompletionResponse with completion details and AI review
      * @throws ResourceNotFoundException if match not found
      * @throws IllegalStateException if match is not in ACTIVE status
      * @throws AccessDeniedException if currentUserId is not a participant
@@ -263,10 +273,50 @@ public class MatchService {
             .build();
         matchCompletionRepository.save(completion);
 
-        log.info("Match {} completed by user {} with repo URL: {}", 
+        log.info("Match {} completed by user {} with repo URL: {}",
                  matchId, currentUserId, repoUrl != null ? repoUrl : "none");
 
+        // Step 6: Generate AI sprint review if repo URL provided
+        if (repoUrl != null && !repoUrl.isBlank()) {
+            try {
+                var reviewOpt = sprintReviewService.generateReview(match, repoUrl);
+                if (reviewOpt.isPresent()) {
+                    var review = reviewOpt.get();
+                    log.info("Generated AI review for match {} with score {}", matchId, review.getScore());
+
+                    return MatchCompletionResponse.withReview(
+                            matchId,
+                            completedAt,
+                            repoUrl,
+                            review.getScore(),
+                            review.getAiFeedback(),
+                            parseJsonArray(review.getStrengths()),
+                            parseJsonArray(review.getMissingElements())
+                    );
+                }
+            } catch (Exception e) {
+                log.error("Failed to generate AI review for match {}: {}", matchId, e.getMessage());
+                // Continue without review - don't fail the completion
+            }
+        }
+
         return MatchCompletionResponse.of(matchId, completedAt, repoUrl);
+    }
+
+    /**
+     * Parses a JSON array string into a List of Strings.
+     */
+    private List<String> parseJsonArray(String json) {
+        if (json == null || json.isBlank() || "[]".equals(json)) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            return mapper.readValue(json, mapper.getTypeFactory().constructCollectionType(List.class, String.class));
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON array: {}", json);
+            return List.of();
+        }
     }
 
     /**
@@ -279,23 +329,17 @@ public class MatchService {
 
     /**
      * Creates a new Match record with ACTIVE status.
-     * Generates a unique tlk.io chat room URL for team communication.
+     * Chat is handled via in-app WebSocket-based real-time messaging.
      */
     private Match createMatch() {
         Match match = Match.builder()
             .status(MatchStatus.ACTIVE)
             .build();
 
-        // Save first to get the generated Match ID
         match = matchRepository.save(match);
+        log.info("Created match {}", match.getId());
 
-        // Generate unique tlk.io chat URL using first 8 chars of Match ID
-        String chatUrl = TLKIO_BASE_URL + match.getId().toString().substring(0, 8);
-        match.setCommunicationLink(chatUrl);
-
-        log.info("Generated tlk.io chat URL for match {}: {}", match.getId(), chatUrl);
-
-        return matchRepository.save(match);
+        return match;
     }
 
     /**
@@ -327,8 +371,9 @@ public class MatchService {
 
     /**
      * Assigns a project template to the match.
-     * Uses AI generation if topic is provided, falls back to random template.
-     * 
+     * Uses AI generation to create fun, portfolio-worthy projects.
+     * Preserves the project idea for later AI review.
+     *
      * @param match       The match to assign project to
      * @param currentUser One of the matched users
      * @param partner     The other matched user
@@ -336,16 +381,20 @@ public class MatchService {
      */
     private MatchProject assignProject(Match match, User currentUser, User partner, String topic) {
         ProjectTemplate template;
-        
+        ProjectIdea projectIdea = null;
+
         // Determine frontend and backend users based on roles
         User frontendUser = currentUser.getRole() == RoleName.FRONTEND ? currentUser : partner;
         User backendUser = currentUser.getRole() == RoleName.BACKEND ? currentUser : partner;
-        
+
         // Try AI generation first
-        template = projectGeneratorService.generateProject(frontendUser, backendUser, topic);
-        
-        // Fallback to random template if AI generation returns null
-        if (template == null) {
+        ProjectGeneratorService.GeneratedProject generated = projectGeneratorService.generateProject(frontendUser, backendUser, topic);
+
+        if (generated != null && generated.template() != null) {
+            template = generated.template();
+            projectIdea = generated.idea();
+        } else {
+            // Fallback to random template if AI generation returns null
             log.info("AI generation returned null, falling back to random template");
             template = projectService.getRandomTemplate();
         }
@@ -353,6 +402,7 @@ public class MatchService {
         MatchProject matchProject = MatchProject.builder()
             .match(match)
             .projectTemplate(template)
+            .projectIdea(projectIdea)
             .startDate(LocalDate.now())
             .endDate(LocalDate.now().plusDays(PROJECT_DURATION_DAYS))
             .build();

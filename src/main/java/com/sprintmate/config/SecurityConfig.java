@@ -57,6 +57,8 @@ public class SecurityConfig {
                 .requestMatchers("/", "/error", "/h2-console/**").permitAll()
                 // Swagger UI endpoints - accessible for API documentation
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                // WebSocket endpoints - permitAll for HTTP handshake, auth handled at STOMP level
+                .requestMatchers("/ws/**", "/ws-sockjs/**").permitAll()
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
@@ -78,11 +80,11 @@ public class SecurityConfig {
                 .deleteCookies("JSESSIONID")
                 .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.OK))
             )
-            // Disable CSRF for H2 console and API endpoints
+            // Disable CSRF for H2 console, API endpoints, and WebSocket
             // API endpoints use session cookies for auth, but CSRF is disabled
             // because frontend and backend may run on different origins (CORS)
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/h2-console/**", "/api/**")
+                .ignoringRequestMatchers("/h2-console/**", "/api/**", "/ws/**", "/ws-sockjs/**")
             )
             // Allow H2 console frames (development only)
             .headers(headers -> headers

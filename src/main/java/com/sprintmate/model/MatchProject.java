@@ -44,6 +44,22 @@ public class MatchProject {
     private ProjectTemplate projectTemplate;
 
     /**
+     * Reference to the project idea used to generate this project.
+     * Preserved for AI review to compare submission against original concept.
+     */
+    @ManyToOne
+    @JoinColumn(name = "project_idea_id")
+    private ProjectIdea projectIdea;
+
+    /**
+     * @deprecated Use projectIdea instead. Kept for backward compatibility.
+     */
+    @Deprecated
+    @ManyToOne
+    @JoinColumn(name = "project_prompt_context_id")
+    private ProjectPromptContext projectPromptContext;
+
+    /**
      * The date when work on this project should begin.
      */
     @Column(nullable = false)
