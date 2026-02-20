@@ -117,7 +117,7 @@ class ChatServiceTest {
         assertThat(capturedMessage.getMatchId()).isEqualTo(matchId);
         assertThat(capturedMessage.getSenderId()).isEqualTo(senderId);
         assertThat(capturedMessage.getSenderName()).isEqualTo("John Doe");
-        assertThat(capturedMessage.getContent()).isEqualTo("Hello, let's start the project!");
+        assertThat(capturedMessage.getContent()).isEqualTo("Hello, let&#39;s start the project!");
     }
 
     @Test
