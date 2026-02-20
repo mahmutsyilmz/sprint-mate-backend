@@ -14,7 +14,6 @@ import com.sprintmate.model.MatchParticipant;
 import com.sprintmate.model.MatchProject;
 import com.sprintmate.model.MatchStatus;
 import com.sprintmate.model.ParticipantRole;
-import com.sprintmate.model.ProjectIdea;
 import com.sprintmate.model.ProjectTemplate;
 import com.sprintmate.model.RoleName;
 import com.sprintmate.model.User;
@@ -244,7 +243,7 @@ public class MatchService {
      * @throws AccessDeniedException if currentUserId is not a participant
      */
     @Transactional
-    public MatchCompletionResponse completeMatch(UUID matchId, MatchCompletionRequest request, UUID currentUserId) {
+    public MatchCompletionResponse completeMatch(UUID matchId, MatchCompletionRequest request, UUID currentUserId, String accessToken) {
         // Step 1: Find the match
         Match match = matchRepository.findById(matchId)
             .orElseThrow(() -> new ResourceNotFoundException("Match", "id", matchId));
@@ -288,7 +287,7 @@ public class MatchService {
         // Step 6: Generate AI sprint review if repo URL provided
         if (repoUrl != null && !repoUrl.isBlank()) {
             try {
-                var reviewOpt = sprintReviewService.generateReview(match, repoUrl);
+                var reviewOpt = sprintReviewService.generateReview(match, repoUrl, accessToken);
                 if (reviewOpt.isPresent()) {
                     var review = reviewOpt.get();
                     log.info("Generated AI review for match {} with score {}", matchId, review.getScore());
@@ -389,7 +388,6 @@ public class MatchService {
      */
     private MatchProject assignProject(Match match, User currentUser, User partner, String topic) {
         ProjectTemplate template;
-        ProjectIdea projectIdea = null;
 
         // Determine frontend and backend users based on roles
         User frontendUser = currentUser.getRole() == RoleName.FRONTEND ? currentUser : partner;
@@ -400,7 +398,6 @@ public class MatchService {
 
         if (generated != null && generated.template() != null) {
             template = generated.template();
-            projectIdea = generated.idea();
         } else {
             // Fallback to random template if AI generation returns null
             log.info("AI generation returned null, falling back to random template");
@@ -410,7 +407,8 @@ public class MatchService {
         MatchProject matchProject = MatchProject.builder()
             .match(match)
             .projectTemplate(template)
-            .projectIdea(projectIdea)
+            .archetype(generated != null ? generated.archetype() : null)
+            .theme(generated != null ? generated.theme() : null)
             .startDate(LocalDate.now())
             .endDate(LocalDate.now().plusDays(PROJECT_DURATION_DAYS))
             .build();

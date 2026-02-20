@@ -1,160 +1,171 @@
-// package com.sprintmate.config;
+package com.sprintmate.config;
 
-// import com.sprintmate.model.*;
-// import com.sprintmate.repository.ProjectTemplateRepository;
-// import com.sprintmate.repository.UserRepository;
-// import org.slf4j.Logger;
-// import org.slf4j.LoggerFactory;
-// import org.springframework.boot.CommandLineRunner;
-// import org.springframework.stereotype.Component;
-// import org.springframework.transaction.annotation.Transactional;
+import com.sprintmate.model.*;
+import com.sprintmate.repository.ProjectThemeRepository;
+import com.sprintmate.repository.UserPreferenceRepository;
+import com.sprintmate.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
-// import java.time.LocalDateTime;
-// import java.util.Set;
-// import java.util.UUID;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
-// /**
-//  * Data initializer that seeds the database with project templates and dummy users
-//  * on application startup. Used for MVP testing of matching logic.
-//  *
-//  * This initializer runs after Spring context is ready and populates:
-//  * - 3 Project Templates (E-Commerce MVP, Weather Dashboard, Task Tracker)
-//  * - 10 Dummy Users (5 Frontend, 5 Backend) with roles set directly on User entity
-//  */
-// @Component
-// public class DataInitializer implements CommandLineRunner {
+/**
+ * Seeds bot users into the waiting queue for local testing.
+ * Enabled via: sprintmate.seed-bot-users=true in application.properties.
+ *
+ * Creates 2 Frontend and 2 Backend bot users with realistic skills and preferences,
+ * all waiting in the queue. This allows a real user to immediately match when clicking
+ * "Find Match" without needing a second real user.
+ *
+ * Runs AFTER ArchetypeThemeInitializer (@Order(2)) so themes are available for preferences.
+ */
+@Component
+@Order(2)
+@ConditionalOnProperty(name = "sprintmate.seed-bot-users", havingValue = "true")
+@RequiredArgsConstructor
+@Slf4j
+public class DataInitializer implements CommandLineRunner {
 
-//     private static final Logger logger = LoggerFactory.getLogger(DataInitializer.class);
+    private final UserRepository userRepository;
+    private final UserPreferenceRepository userPreferenceRepository;
+    private final ProjectThemeRepository themeRepository;
+    private final DataSource dataSource;
 
-//     private final ProjectTemplateRepository projectTemplateRepository;
-//     private final UserRepository userRepository;
+    private static final List<String> BOT_LOGINS = List.of(
+            "bot-fe-1", "bot-fe-2", "bot-be-1", "bot-be-2"
+    );
 
-//     public DataInitializer(
-//             ProjectTemplateRepository projectTemplateRepository,
-//             UserRepository userRepository) {
-//         this.projectTemplateRepository = projectTemplateRepository;
-//         this.userRepository = userRepository;
-//     }
+    @Override
+    @Transactional
+    public void run(String... args) {
+        boolean botsExist = userRepository.findByGithubUrl("https://github.com/bot-fe-1").isPresent();
 
-//     @Override
-//     @Transactional
-//     public void run(String... args) {
-//         logger.info("Starting data initialization...");
+        if (botsExist) {
+            requeueBots();
+            return;
+        }
 
-//         seedProjectTemplates();
-//         seedDummyUsers();
+        seedBots();
+    }
 
-//         logger.info("Data initialization completed successfully!");
-//     }
+    /**
+     * Clears old bot matches and puts bots back in the waiting queue.
+     * This runs on every restart so bots are always available for testing.
+     */
+    private void requeueBots() {
+        log.info("Re-queuing bot users for testing...");
 
-//     /**
-//      * Seeds 3 project templates for testing matching logic.
-//      */
-//     private void seedProjectTemplates() {
-//         if (projectTemplateRepository.count() == 0) {
-//             logger.info("Seeding project templates...");
+        // Clear old matches involving bots via raw SQL
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            // Remove bot participations
+            stmt.executeUpdate(
+                "DELETE FROM match_participants WHERE user_id IN (" +
+                "  SELECT id FROM users WHERE github_url LIKE 'https://github.com/bot-%')"
+            );
+            // Remove orphaned match_projects
+            stmt.executeUpdate(
+                "DELETE FROM match_projects WHERE match_id NOT IN (" +
+                "  SELECT DISTINCT match_id FROM match_participants)"
+            );
+            // Remove orphaned matches
+            stmt.executeUpdate(
+                "DELETE FROM matches WHERE id NOT IN (" +
+                "  SELECT DISTINCT match_id FROM match_participants)"
+            );
+            log.debug("Cleared old bot matches.");
+        } catch (Exception e) {
+            log.warn("Could not clear bot matches: {}", e.getMessage());
+        }
 
-//             ProjectTemplate ecommerce = ProjectTemplate.builder()
-//                     .title("E-Commerce MVP")
-//                     .description("Build a full-stack e-commerce application with product catalog, " +
-//                             "shopping cart, and checkout flow. Frontend: React with TypeScript, " +
-//                             "TailwindCSS. Backend: Java Spring Boot, PostgreSQL. " +
-//                             "Features: User authentication, product search, order management.")
-//                     .build();
-//             projectTemplateRepository.save(ecommerce);
+        // Reset waitingSince for all bots
+        LocalDateTime baseTime = LocalDateTime.now().minusMinutes(30);
+        int index = 0;
+        for (String login : BOT_LOGINS) {
+            Optional<User> botOpt = userRepository.findByGithubUrl("https://github.com/" + login);
+            if (botOpt.isPresent()) {
+                User bot = botOpt.get();
+                bot.setWaitingSince(baseTime.plusMinutes(index * 5L));
+                userRepository.save(bot);
+                index++;
+            }
+        }
+        log.info("Re-queued {} bot users into waiting queue.", index);
+    }
 
-//             ProjectTemplate weather = ProjectTemplate.builder()
-//                     .title("Weather Dashboard")
-//                     .description("Create a weather dashboard that displays current conditions " +
-//                             "and forecasts for multiple locations. Frontend: Vue.js with Vuetify. " +
-//                             "Backend: Node.js with Express, Redis caching. " +
-//                             "Features: Location search, favorites, weather alerts, data visualization.")
-//                     .build();
-//             projectTemplateRepository.save(weather);
+    private void seedBots() {
+        log.info("Seeding bot users for local testing...");
 
-//             ProjectTemplate taskTracker = ProjectTemplate.builder()
-//                     .title("Task Tracker")
-//                     .description("Develop a collaborative task tracking application with " +
-//                             "kanban boards and team features. Frontend: Angular with Material UI. " +
-//                             "Backend: Go with Gin framework, MongoDB. " +
-//                             "Features: Drag-and-drop, real-time updates, team collaboration, due dates.")
-//                     .build();
-//             projectTemplateRepository.save(taskTracker);
+        List<ProjectTheme> allThemes = themeRepository.findByActiveTrue();
+        LocalDateTime baseTime = LocalDateTime.now().minusMinutes(30);
 
-//             logger.info("Project templates seeded: E-Commerce MVP, Weather Dashboard, Task Tracker");
-//         } else {
-//             logger.info("Project templates already exist, skipping seed.");
-//         }
-//     }
+        // Frontend Bot 1 - React specialist
+        User feBot1 = createBot("bot-fe-1", "Alex Frontend", RoleName.FRONTEND,
+                Set.of("React", "TypeScript", "Tailwind CSS", "Vite"),
+                baseTime);
+        createPreference(feBot1, 2, "WebSocket, Redux", allThemes, Set.of("gaming", "social"));
 
-//     /**
-//      * Seeds 10 dummy users (5 Frontend, 5 Backend) with role set directly on User entity.
-//      * All dummy users are added to the waiting queue with staggered times for FIFO testing.
-//      */
-//     private void seedDummyUsers() {
-//         if (userRepository.count() == 0) {
-//             logger.info("Seeding dummy users...");
+        // Frontend Bot 2 - Vue specialist
+        User feBot2 = createBot("bot-fe-2", "Jordan UI", RoleName.FRONTEND,
+                Set.of("Vue.js", "JavaScript", "SCSS", "Pinia"),
+                baseTime.plusMinutes(5));
+        createPreference(feBot2, 1, "GraphQL", allThemes, Set.of("education", "productivity"));
 
-//             // Base time for queue ordering - older times = first in queue (FIFO)
-//             LocalDateTime baseTime = LocalDateTime.now().minusHours(1);
+        // Backend Bot 1 - Spring specialist
+        User beBot1 = createBot("bot-be-1", "Sam Backend", RoleName.BACKEND,
+                Set.of("Java", "Spring Boot", "PostgreSQL", "Docker"),
+                baseTime.plusMinutes(10));
+        createPreference(beBot1, 2, "Kafka, Redis", allThemes, Set.of("finance", "e-commerce"));
 
-//             // Frontend skills for realistic AI project generation testing
-//             Set<String> frontendSkills = Set.of("React", "TypeScript", "Tailwind", "Vite");
+        // Backend Bot 2 - Node specialist
+        User beBot2 = createBot("bot-be-2", "Riley Server", RoleName.BACKEND,
+                Set.of("Node.js", "Express", "MongoDB", "Redis"),
+                baseTime.plusMinutes(15));
+        createPreference(beBot2, 3, "Microservices", allThemes, Set.of("health", "entertainment"));
 
-//             // Backend skills for realistic AI project generation testing
-//             Set<String> backendSkills = Set.of("Java", "Spring Boot", "PostgreSQL", "Docker");
+        log.info("Seeded 4 bot users (2 FE + 2 BE) in waiting queue for testing.");
+    }
 
-//             // Create 5 Frontend developers (all waiting in queue with staggered times)
-//             for (int i = 1; i <= 5; i++) {
-//                 User frontendUser = User.builder()
-//                         .id(UUID.randomUUID())
-//                         .name("Bot Frontend " + i)
-//                         .surname("Developer")
-//                         .githubUrl("https://github.com/fake_fe_" + i)
-//                         .role(RoleName.FRONTEND)
-//                         .skills(new java.util.HashSet<>(frontendSkills))
-//                         // Stagger queue times: FE1 joined 60min ago, FE2 55min ago, etc.
-//                         .waitingSince(baseTime.plusMinutes((i - 1) * 5L))
-//                         .build();
-//                 userRepository.save(frontendUser);
 
-//                 logger.debug("Created frontend user: {} with skills {} (waiting since {})",
-//                         frontendUser.getName(), frontendUser.getSkills(), frontendUser.getWaitingSince());
-//             }
+    private User createBot(String githubLogin, String name, RoleName role,
+                           Set<String> skills, LocalDateTime waitingSince) {
+        User user = User.builder()
+                .name(name)
+                .githubUrl("https://github.com/" + githubLogin)
+                .role(role)
+                .skills(new HashSet<>(skills))
+                .waitingSince(waitingSince)
+                .build();
+        return userRepository.save(user);
+    }
 
-//             // Create 5 Backend developers (all waiting in queue with staggered times)
-//             for (int i = 1; i <= 5; i++) {
-//                 User backendUser = User.builder()
-//                         .id(UUID.randomUUID())
-//                         .name("Bot Backend " + i)
-//                         .surname("Developer")
-//                         .githubUrl("https://github.com/fake_be_" + i)
-//                         .role(RoleName.BACKEND)
-//                         .skills(new java.util.HashSet<>(backendSkills))
-//                         // Stagger queue times: BE1 joined 60min ago, BE2 55min ago, etc.
-//                         .waitingSince(baseTime.plusMinutes((i - 1) * 5L))
-//                         .build();
-//                 userRepository.save(backendUser);
+    private void createPreference(User user, int difficulty, String learningGoals,
+                                  List<ProjectTheme> allThemes, Set<String> themeCodes) {
+        Set<ProjectTheme> preferred = new HashSet<>();
+        for (ProjectTheme theme : allThemes) {
+            if (themeCodes.contains(theme.getCode())) {
+                preferred.add(theme);
+            }
+        }
 
-//                 logger.debug("Created backend user: {} with skills {} (waiting since {})",
-//                         backendUser.getName(), backendUser.getSkills(), backendUser.getWaitingSince());
-//             }
-
-//             // Create real user: Mahmut Sami Yılmaz (NOT in queue - will join when they click find match)
-//             User realUser = User.builder()
-//                     .id(UUID.fromString("63357787-77fd-4175-9a41-e899dc4c100e"))
-//                     .name("Mahmut Sami Yılmaz")
-//                     .surname(null)
-//                     .githubUrl("https://github.com/mahmutsyilmz")
-//                     .role(null)          // No role yet
-//                     .waitingSince(null)  // Not in queue
-//                     .build();
-//             userRepository.save(realUser);
-
-//             logger.info("Dummy users seeded: 5 Frontend, 5 Backend developers (all in waiting queue)");
-//             logger.info("Real user seeded: Mahmut Sami Yılmaz (not in queue)");
-//         } else {
-//             logger.info("Users already exist, skipping seed.");
-//         }
-//     }
-// }
+        UserPreference pref = UserPreference.builder()
+                .user(user)
+                .difficultyPreference(difficulty)
+                .learningGoals(learningGoals)
+                .preferredThemes(preferred)
+                .build();
+        userPreferenceRepository.save(pref);
+    }
+}

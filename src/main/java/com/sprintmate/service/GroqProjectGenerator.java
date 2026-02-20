@@ -3,16 +3,12 @@ package com.sprintmate.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sprintmate.model.ProjectIdea;
 import com.sprintmate.model.ProjectTemplate;
 import com.sprintmate.model.User;
-import com.sprintmate.repository.ProjectIdeaRepository;
 import com.sprintmate.repository.ProjectTemplateRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -20,17 +16,11 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.Random;
-import java.util.Set;
 
 /**
  * Groq-powered implementation of ProjectGeneratorService.
  *
- * NEW APPROACH: Fun, Portfolio-Worthy Projects
- * Instead of stressful "crisis scenarios", we generate exciting mini-projects
- * that developers would actually want to build and show off.
- *
+ * Uses archetype + theme + user preferences for personalized project generation.
  * Model: Llama-3.3-70b-versatile
  */
 @Service
@@ -40,7 +30,8 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
 
     private final RestClient groqRestClient;
     private final ProjectTemplateRepository projectTemplateRepository;
-    private final ProjectIdeaRepository projectIdeaRepository;
+    private final ProjectSelectionService projectSelectionService;
+    private final ModularPromptBuilder modularPromptBuilder;
     private final ObjectMapper objectMapper;
 
     private static final String MODEL_NAME = "llama-3.3-70b-versatile";
@@ -50,7 +41,8 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
             @Value("${groq.base-url}") String baseUrl,
             RestClient.Builder restClientBuilder,
             ProjectTemplateRepository projectTemplateRepository,
-            ProjectIdeaRepository projectIdeaRepository,
+            ProjectSelectionService projectSelectionService,
+            ModularPromptBuilder modularPromptBuilder,
             ObjectMapper objectMapper) {
 
         this.groqRestClient = restClientBuilder
@@ -59,7 +51,8 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
                 .defaultHeader("Content-Type", "application/json")
                 .build();
         this.projectTemplateRepository = projectTemplateRepository;
-        this.projectIdeaRepository = projectIdeaRepository;
+        this.projectSelectionService = projectSelectionService;
+        this.modularPromptBuilder = modularPromptBuilder;
         this.objectMapper = objectMapper;
 
         log.info("GroqProjectGenerator initialized with model: {}", MODEL_NAME);
@@ -67,149 +60,37 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
 
     @Override
     public GeneratedProject generateProject(User frontendUser, User backendUser, String topic) {
-        log.info("Generating fun project for {} (FE) and {} (BE)",
+        log.info("Generating project for {} (FE) and {} (BE)",
                 frontendUser.getName(), backendUser.getName());
 
         try {
-            // Try to fetch a random project idea
-            Optional<ProjectIdea> ideaOpt = fetchRandomProjectIdea();
-            ProjectIdea usedIdea = ideaOpt.orElse(null);
+            // Select archetype + theme based on user preferences
+            ProjectSelectionService.SelectionResult selection =
+                    projectSelectionService.select(frontendUser, backendUser);
 
-            String systemPrompt = buildPrompt(
+            // Build modular prompt
+            String systemPrompt = modularPromptBuilder.buildPrompt(
                     frontendUser.getSkills(),
                     backendUser.getSkills(),
-                    usedIdea
+                    selection.archetype(),
+                    selection.theme(),
+                    selection.targetComplexity(),
+                    selection.frontendLearningGoals(),
+                    selection.backendLearningGoals()
             );
 
             String jsonResponse = callGroqApi(systemPrompt);
             ProjectTemplate template = parseGroqResponse(jsonResponse);
 
             ProjectTemplate savedTemplate = projectTemplateRepository.save(template);
-            log.info("Generated project: '{}'", savedTemplate.getTitle());
+            log.info("Generated project: '{}' (archetype={}, theme={})",
+                    savedTemplate.getTitle(), selection.archetype().getCode(), selection.theme().getCode());
 
-            return new GeneratedProject(savedTemplate, usedIdea);
+            return new GeneratedProject(savedTemplate, null, selection.archetype(), selection.theme());
         } catch (Exception e) {
             log.error("Project generation failed: {}", e.getMessage());
-            return new GeneratedProject(createFallbackTemplate(), null);
+            return new GeneratedProject(createFallbackTemplate(), null, null, null);
         }
-    }
-
-    /**
-     * Fetches a random project idea from the database.
-     */
-    private Optional<ProjectIdea> fetchRandomProjectIdea() {
-        try {
-            long totalCount = projectIdeaRepository.countActive();
-            if (totalCount == 0) {
-                log.info("No project ideas in database, using AI creativity");
-                return Optional.empty();
-            }
-
-            Random random = new Random();
-            int randomOffset = random.nextInt((int) totalCount);
-            Page<ProjectIdea> page = projectIdeaRepository.findAllActivePaged(
-                    PageRequest.of(randomOffset, 1)
-            );
-
-            if (page.hasContent()) {
-                ProjectIdea idea = page.getContent().get(0);
-                log.info("Selected project idea: {} ({})", idea.getName(), idea.getCategory());
-                return Optional.of(idea);
-            }
-            return Optional.empty();
-        } catch (Exception e) {
-            log.warn("Failed to fetch project idea: {}", e.getMessage());
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Builds an exciting prompt that generates fun, portfolio-worthy projects.
-     */
-    private String buildPrompt(Set<String> frontendSkills, Set<String> backendSkills, ProjectIdea idea) {
-        String ideaSection = "";
-        if (idea != null) {
-            ideaSection = """
-
-                PROJECT INSPIRATION (Use this as a starting point, but make it unique!):
-                Category: %s
-                Concept: %s
-                Pitch: %s
-                Key Features to Include: %s
-                Example Use Case: %s
-
-                """.formatted(
-                    idea.getCategory(),
-                    idea.getCoreConcept(),
-                    idea.getPitch(),
-                    idea.getKeyFeatures(),
-                    idea.getExampleUseCase() != null ? idea.getExampleUseCase() : "Be creative!"
-            );
-        }
-
-        return """
-            You are a creative tech mentor helping two developers build something AWESOME together.
-            Your job is to design a fun, achievable mini-project they can complete in 1 WEEK.
-
-            THE TEAM:
-            Frontend Developer knows: %s
-            Backend Developer knows: %s
-            %s
-            DESIGN PRINCIPLES:
-            1. FUN FIRST - The project should be something developers are EXCITED to build
-            2. PORTFOLIO-WORTHY - Something they'd proudly show to recruiters
-            3. ACHIEVABLE - Must be completable in 1 week by 2 people
-            4. MODERN - Use their actual skills, no legacy technologies
-            5. COLLABORATIVE - Clear separation between frontend and backend work
-            6. REAL VALUE - Something that could actually be used by real people
-
-            PROJECT REQUIREMENTS:
-            - 4-6 specific frontend tasks (UI components, state management, API integration)
-            - 4-6 specific backend tasks (APIs, database, business logic)
-            - 4-8 API endpoints with clear purposes
-            - The project should have a clear "wow factor" - something that impresses
-
-            GOOD PROJECT EXAMPLES:
-            - A real-time collaborative todo app with live updates
-            - A mini social platform with posts, likes, and comments
-            - A personal finance tracker with charts and insights
-            - A recipe sharing app with search and favorites
-            - A quiz/trivia game with leaderboards
-            - A bookmark manager with tags and search
-
-            BAD PROJECT EXAMPLES (AVOID THESE):
-            - Generic CRUD apps with no personality
-            - Enterprise systems or "crisis recovery" projects
-            - Anything requiring legacy tech (Classic ASP, COBOL, etc.)
-            - Projects that are too complex for 1 week
-            - Boring "database refactoring" or "connection pool optimization"
-
-            OUTPUT FORMAT (Strictly valid JSON, no markdown):
-            {
-              "title": "Catchy Project Name (e.g., 'SnapShare - Mini Photo Platform')",
-              "description": "2-3 sentence pitch that makes developers excited to build this",
-              "wowFactor": "What makes this project impressive (1 sentence)",
-              "frontendTasks": [
-                "Specific task with technology (e.g., 'Build responsive feed UI with infinite scroll using React')",
-                "Another specific task",
-                "..."
-              ],
-              "backendTasks": [
-                "Specific task with technology (e.g., 'Implement JWT auth with refresh tokens in Spring Boot')",
-                "Another specific task",
-                "..."
-              ],
-              "apiEndpoints": [
-                { "method": "POST", "path": "/api/auth/login", "description": "User login, returns JWT" },
-                { "method": "GET", "path": "/api/posts", "description": "Get paginated feed" },
-                "..."
-              ]
-            }
-            """.formatted(
-                frontendSkills.isEmpty() ? "React, TypeScript, CSS" : frontendSkills,
-                backendSkills.isEmpty() ? "Java, Spring Boot, PostgreSQL" : backendSkills,
-                ideaSection
-        );
     }
 
     @Retryable(
@@ -256,16 +137,13 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
     private String buildDescription(JsonNode projectJson) {
         StringBuilder sb = new StringBuilder();
 
-        // Project pitch
         sb.append(projectJson.path("description").asText()).append("\n\n");
 
-        // Wow factor
         String wowFactor = projectJson.path("wowFactor").asText();
         if (!wowFactor.isBlank()) {
             sb.append("✨ What makes this special: ").append(wowFactor).append("\n\n");
         }
 
-        // API Contract
         JsonNode apiEndpoints = projectJson.path("apiEndpoints");
         if (apiEndpoints.isArray() && !apiEndpoints.isEmpty()) {
             sb.append("📡 API Contract:\n");
@@ -278,7 +156,6 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
             sb.append("\n");
         }
 
-        // Frontend Tasks
         JsonNode frontendTasks = projectJson.path("frontendTasks");
         if (frontendTasks.isArray() && !frontendTasks.isEmpty()) {
             sb.append("🎨 Frontend Tasks:\n");
@@ -286,7 +163,6 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
             sb.append("\n");
         }
 
-        // Backend Tasks
         JsonNode backendTasks = projectJson.path("backendTasks");
         if (backendTasks.isArray() && !backendTasks.isEmpty()) {
             sb.append("⚙️ Backend Tasks:\n");

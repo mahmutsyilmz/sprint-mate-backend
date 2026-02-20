@@ -5,14 +5,18 @@ import com.sprintmate.repository.ProjectIdeaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Seeds the database with fun, portfolio-worthy project ideas on startup.
- * These ideas inspire the AI to generate exciting projects for matched developers.
+ * @deprecated Replaced by {@link ArchetypeThemeInitializer} which uses archetype + theme system.
+ * Enable with sprintmate.seed-legacy-ideas=true if needed for backward compatibility.
  */
+@Deprecated
 @Component
+@ConditionalOnProperty(name = "sprintmate.seed-legacy-ideas", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 @Slf4j
 public class ProjectIdeaInitializer implements CommandLineRunner {

@@ -66,17 +66,18 @@ public class SprintReviewService {
     /**
      * Generates an AI review for a completed sprint.
      *
-     * @param match  The completed match
-     * @param repoUrl The GitHub repository URL submitted by the user
+     * @param match       The completed match
+     * @param repoUrl     The GitHub repository URL submitted by the user
+     * @param accessToken The user's GitHub OAuth2 access token for private repo access
      * @return Optional containing the review, empty if review generation failed
      */
     @Transactional
-    public Optional<SprintReview> generateReview(Match match, String repoUrl) {
+    public Optional<SprintReview> generateReview(Match match, String repoUrl, String accessToken) {
         log.info("Generating sprint review for match {} with repo {}", match.getId(), repoUrl);
 
         try {
-            // Fetch README content
-            String readmeContent = gitHubService.fetchReadme(repoUrl);
+            // Fetch README content using authenticated request
+            String readmeContent = gitHubService.fetchReadme(repoUrl, accessToken);
             if (readmeContent == null || readmeContent.isBlank()) {
                 log.warn("Empty README fetched for match {}", match.getId());
                 return createEmptyReview(match, repoUrl, "No README content found");

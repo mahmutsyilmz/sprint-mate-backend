@@ -136,7 +136,7 @@ class MatchServiceTest {
         ProjectTemplate template = TestDataBuilder.buildProjectTemplate("Todo App", "Build a task manager");
         ProjectIdea idea = ProjectIdea.builder().build();
         ProjectGeneratorService.GeneratedProject generated =
-                new ProjectGeneratorService.GeneratedProject(template, idea);
+                new ProjectGeneratorService.GeneratedProject(template, idea, null, null);
 
         Match savedMatch = Match.builder()
                 .id(UUID.randomUUID())
@@ -183,7 +183,7 @@ class MatchServiceTest {
         // Arrange - Frontend user looking for Backend
         ProjectTemplate template = TestDataBuilder.buildProjectTemplate("Chat App", "Real-time chat");
         ProjectGeneratorService.GeneratedProject generated =
-                new ProjectGeneratorService.GeneratedProject(template, null);
+                new ProjectGeneratorService.GeneratedProject(template, null, null, null);
 
         Match savedMatch = Match.builder().id(UUID.randomUUID()).status(MatchStatus.ACTIVE).build();
         MatchProject matchProject = MatchProject.builder()
@@ -218,7 +218,7 @@ class MatchServiceTest {
 
         ProjectTemplate template = TestDataBuilder.buildProjectTemplate("API", "REST API");
         ProjectGeneratorService.GeneratedProject generated =
-                new ProjectGeneratorService.GeneratedProject(template, null);
+                new ProjectGeneratorService.GeneratedProject(template, null, null, null);
 
         Match savedMatch = Match.builder().id(UUID.randomUUID()).status(MatchStatus.ACTIVE).build();
         MatchProject matchProject = MatchProject.builder()
@@ -331,7 +331,7 @@ class MatchServiceTest {
         String topic = "Fintech";
         ProjectTemplate template = TestDataBuilder.buildProjectTemplate("Fintech App", "Banking app");
         ProjectGeneratorService.GeneratedProject generated =
-                new ProjectGeneratorService.GeneratedProject(template, null);
+                new ProjectGeneratorService.GeneratedProject(template, null, null, null);
 
         Match savedMatch = Match.builder().id(UUID.randomUUID()).status(MatchStatus.ACTIVE).build();
         MatchProject matchProject = MatchProject.builder()
@@ -403,7 +403,7 @@ class MatchServiceTest {
         when(matchParticipantRepository.findByMatch(match)).thenReturn(List.of(participant));
 
         // Act
-        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId);
+        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId, null);
 
         // Assert
         assertThat(response).isNotNull();
@@ -438,7 +438,7 @@ class MatchServiceTest {
         when(matchParticipantRepository.findByMatch(match)).thenReturn(List.of(participant));
 
         // Act & Assert
-        assertThatThrownBy(() -> matchService.completeMatch(matchId, request, nonParticipantId))
+        assertThatThrownBy(() -> matchService.completeMatch(matchId, request, nonParticipantId, null))
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessageContaining(nonParticipantId.toString())
                 .hasMessageContaining("not authorized");
@@ -459,7 +459,7 @@ class MatchServiceTest {
         when(matchRepository.findById(matchId)).thenReturn(Optional.of(completedMatch));
 
         // Act & Assert
-        assertThatThrownBy(() -> matchService.completeMatch(matchId, request, frontendUserId))
+        assertThatThrownBy(() -> matchService.completeMatch(matchId, request, frontendUserId, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cannot be completed")
                 .hasMessageContaining("COMPLETED");
@@ -493,10 +493,10 @@ class MatchServiceTest {
 
         when(matchRepository.findById(matchId)).thenReturn(Optional.of(match));
         when(matchParticipantRepository.findByMatch(match)).thenReturn(List.of(participant));
-        when(sprintReviewService.generateReview(match, repoUrl)).thenReturn(Optional.of(review));
+        when(sprintReviewService.generateReview(eq(match), eq(repoUrl), any())).thenReturn(Optional.of(review));
 
         // Act
-        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId);
+        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId, null);
 
         // Assert
         assertThat(response).isNotNull();
@@ -506,7 +506,7 @@ class MatchServiceTest {
         assertThat(response.reviewStrengths()).isEmpty();
         assertThat(response.reviewMissingElements()).isEmpty();
 
-        verify(sprintReviewService).generateReview(match, repoUrl);
+        verify(sprintReviewService).generateReview(eq(match), eq(repoUrl), any());
     }
 
     @Test
@@ -526,7 +526,7 @@ class MatchServiceTest {
         when(matchParticipantRepository.findByMatch(match)).thenReturn(List.of(participant));
 
         // Act
-        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId);
+        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId, null);
 
         // Assert
         assertThat(response.reviewScore()).isNull();
@@ -535,7 +535,7 @@ class MatchServiceTest {
         assertThat(response.reviewMissingElements()).isNull();
 
         // Verify AI review was not called
-        verify(sprintReviewService, never()).generateReview(any(), any());
+        verify(sprintReviewService, never()).generateReview(any(), any(), any());
     }
 
     @Test
@@ -554,11 +554,11 @@ class MatchServiceTest {
 
         when(matchRepository.findById(matchId)).thenReturn(Optional.of(match));
         when(matchParticipantRepository.findByMatch(match)).thenReturn(List.of(participant));
-        when(sprintReviewService.generateReview(match, repoUrl))
+        when(sprintReviewService.generateReview(eq(match), eq(repoUrl), any()))
                 .thenThrow(new RuntimeException("AI service unavailable"));
 
         // Act
-        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId);
+        MatchCompletionResponse response = matchService.completeMatch(matchId, request, frontendUserId, null);
 
         // Assert
         assertThat(response).isNotNull();
@@ -578,7 +578,7 @@ class MatchServiceTest {
 
         ProjectTemplate template = TestDataBuilder.buildProjectTemplate("App", "Test app");
         ProjectGeneratorService.GeneratedProject generated =
-                new ProjectGeneratorService.GeneratedProject(template, null);
+                new ProjectGeneratorService.GeneratedProject(template, null, null, null);
 
         Match savedMatch = Match.builder().id(UUID.randomUUID()).status(MatchStatus.ACTIVE).build();
         MatchProject matchProject = MatchProject.builder()
@@ -610,7 +610,7 @@ class MatchServiceTest {
 
         ProjectTemplate template = TestDataBuilder.buildProjectTemplate("App", "Test app");
         ProjectGeneratorService.GeneratedProject generated =
-                new ProjectGeneratorService.GeneratedProject(template, null);
+                new ProjectGeneratorService.GeneratedProject(template, null, null, null);
 
         Match savedMatch = Match.builder().id(UUID.randomUUID()).status(MatchStatus.ACTIVE).build();
         MatchProject matchProject = MatchProject.builder()
@@ -643,7 +643,7 @@ class MatchServiceTest {
         when(matchRepository.findById(nonExistentMatchId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThatThrownBy(() -> matchService.completeMatch(nonExistentMatchId, request, frontendUserId))
+        assertThatThrownBy(() -> matchService.completeMatch(nonExistentMatchId, request, frontendUserId, null))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Match")
                 .hasMessageContaining(nonExistentMatchId.toString());

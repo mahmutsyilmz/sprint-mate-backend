@@ -25,5 +25,6 @@ public record UserResponse(
     String surname,
     String role,
     String bio,
-    Set<String> skills
+    Set<String> skills,
+    UserPreferenceResponse preference
 ) {}

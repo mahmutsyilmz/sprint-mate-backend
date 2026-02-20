@@ -1,11 +1,7 @@
 package com.sprintmate.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sprintmate.model.ProjectIdea;
-import com.sprintmate.model.ProjectTemplate;
-import com.sprintmate.model.RoleName;
-import com.sprintmate.model.User;
-import com.sprintmate.repository.ProjectIdeaRepository;
+import com.sprintmate.model.*;
 import com.sprintmate.repository.ProjectTemplateRepository;
 import com.sprintmate.service.ProjectGeneratorService.GeneratedProject;
 import com.sprintmate.util.TestDataBuilder;
@@ -14,13 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.web.client.RestClient;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,10 +21,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for GroqProjectGenerator.
- * Tests AI-driven project generation logic and fallback behavior.
- *
- * Validates Bug #8 fix: RestClient is now injected via RestClient.Builder
- * instead of being created directly in the constructor.
+ * Tests AI-driven project generation logic with archetype+theme system.
  */
 @ExtendWith(MockitoExtension.class)
 class GroqProjectGeneratorTest {
@@ -53,7 +42,10 @@ class GroqProjectGeneratorTest {
     private ProjectTemplateRepository projectTemplateRepository;
 
     @Mock
-    private ProjectIdeaRepository projectIdeaRepository;
+    private ProjectSelectionService projectSelectionService;
+
+    @Mock
+    private ModularPromptBuilder modularPromptBuilder;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -62,6 +54,8 @@ class GroqProjectGeneratorTest {
 
     private User frontendUser;
     private User backendUser;
+    private ProjectArchetype testArchetype;
+    private ProjectTheme testTheme;
 
     @BeforeEach
     void setUp() {
@@ -78,7 +72,8 @@ class GroqProjectGeneratorTest {
                 "https://api.groq.com",
                 restClientBuilder,
                 projectTemplateRepository,
-                projectIdeaRepository,
+                projectSelectionService,
+                modularPromptBuilder,
                 objectMapper
         );
 
@@ -88,41 +83,41 @@ class GroqProjectGeneratorTest {
 
         backendUser = TestDataBuilder.buildUser(RoleName.BACKEND);
         backendUser.setSkills(Set.of("Java", "Spring Boot", "PostgreSQL"));
-    }
 
-    @Test
-    void should_GenerateProjectWithAI_When_GroqApiSucceeds() throws Exception {
-        // Arrange - We can't test actual AI generation without real API,
-        // so we verify fallback behavior
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Collaborative Mini Project")
-                .description("Fallback description")
+        // Setup test archetype and theme
+        testArchetype = ProjectArchetype.builder()
+                .code("CRUD_APP")
+                .displayName("CRUD Application")
+                .structureDescription("Standard CRUD app")
+                .componentPatterns("CRUD,REST")
+                .apiPatterns("REST")
+                .minComplexity(1)
+                .maxComplexity(3)
                 .build();
 
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
-        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(responseSpec.body(String.class)).thenThrow(new RuntimeException("Simulated API error"));
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Social Media");
-
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.template()).isNotNull();
-        verify(projectTemplateRepository).save(any(ProjectTemplate.class));
+        testTheme = ProjectTheme.builder()
+                .code("finance")
+                .displayName("Finance")
+                .domainContext("Financial data and transactions")
+                .exampleEntities("budget,transaction")
+                .build();
     }
 
     @Test
     void should_UseFallbackTemplate_When_GroqApiFails() {
         // Arrange
+        ProjectSelectionService.SelectionResult selection =
+                new ProjectSelectionService.SelectionResult(testArchetype, testTheme, 2, null, null);
+
+        when(projectSelectionService.select(frontendUser, backendUser)).thenReturn(selection);
+        when(modularPromptBuilder.buildPrompt(any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenReturn("test prompt");
+        when(restClient.post()).thenThrow(new RuntimeException("Groq API error"));
+
         ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
                 .title("Collaborative Mini Project")
                 .description("Fallback project description")
                 .build();
-
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
-        when(restClient.post()).thenThrow(new RuntimeException("Groq API error"));
         when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
 
         // Act
@@ -131,51 +126,42 @@ class GroqProjectGeneratorTest {
         // Assert
         assertThat(result).isNotNull();
         assertThat(result.template()).isNotNull();
-        assertThat(result.idea()).isNull();
+        assertThat(result.archetype()).isNull();
+        assertThat(result.theme()).isNull();
         verify(projectTemplateRepository).save(any(ProjectTemplate.class));
     }
 
     @Test
-    void should_IncludeProjectIdea_When_IdeasExistInDatabase() {
-        // Arrange - Testing with fallback to avoid complex JSON mocking
-        when(projectIdeaRepository.countActive()).thenReturn(1L);
-        when(projectIdeaRepository.findAllActivePaged(any(PageRequest.class)))
-                .thenThrow(new RuntimeException("Simulated error"));
-
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Collaborative Mini Project")
-                .description("Fallback")
-                .build();
-
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Social");
-
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.template()).isNotNull();
-        verify(projectIdeaRepository).countActive();
-    }
-
-    @Test
-    void should_SkipProjectIdea_When_NoIdeasInDatabase() {
+    void should_CallSelectionService_When_GeneratingProject() {
         // Arrange
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Custom App")
-                .description("Description")
-                .build();
+        ProjectSelectionService.SelectionResult selection =
+                new ProjectSelectionService.SelectionResult(testArchetype, testTheme, 2, "WebSocket", "GraphQL");
 
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
+        when(projectSelectionService.select(frontendUser, backendUser)).thenReturn(selection);
+        when(modularPromptBuilder.buildPrompt(any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenReturn("test prompt");
+
+        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
+                .title("Test")
+                .description("Test")
+                .build();
+        when(restClient.post()).thenThrow(new RuntimeException("API error"));
         when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
 
         // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Custom");
+        groqProjectGenerator.generateProject(frontendUser, backendUser, "Social");
 
         // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.idea()).isNull();
-        verify(projectIdeaRepository, never()).findAllActivePaged(any());
+        verify(projectSelectionService).select(frontendUser, backendUser);
+        verify(modularPromptBuilder).buildPrompt(
+                eq(frontendUser.getSkills()),
+                eq(backendUser.getSkills()),
+                eq(testArchetype),
+                eq(testTheme),
+                eq(2),
+                eq("WebSocket"),
+                eq("GraphQL")
+        );
     }
 
     @Test
@@ -184,12 +170,18 @@ class GroqProjectGeneratorTest {
         frontendUser.setSkills(new HashSet<>());
         backendUser.setSkills(new HashSet<>());
 
+        ProjectSelectionService.SelectionResult selection =
+                new ProjectSelectionService.SelectionResult(testArchetype, testTheme, 2, null, null);
+
+        when(projectSelectionService.select(frontendUser, backendUser)).thenReturn(selection);
+        when(modularPromptBuilder.buildPrompt(any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenReturn("test prompt");
+
         ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
                 .title("Default Project")
                 .description("Default")
                 .build();
-
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
+        when(restClient.post()).thenThrow(new RuntimeException("API error"));
         when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
 
         // Act
@@ -201,135 +193,10 @@ class GroqProjectGeneratorTest {
     }
 
     @Test
-    void should_HandleNullProjectIdea_When_FetchFails() {
-        // Arrange
-        when(projectIdeaRepository.countActive()).thenThrow(new RuntimeException("Database error"));
-
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Robust App")
-                .description("Works anyway")
-                .build();
-
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Test");
-
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.idea()).isNull(); // Should gracefully handle idea fetch failure
-    }
-
-    @Test
-    void should_CreateFallbackTemplate_When_JsonParsingFails() {
-        // Arrange
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Collaborative Mini Project")
-                .description("Fallback")
-                .build();
-
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
-        when(restClient.post()).thenThrow(new RuntimeException("JSON parsing error"));
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Any");
-
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.template().getTitle()).isEqualTo("Collaborative Mini Project");
-        verify(projectTemplateRepository).save(any(ProjectTemplate.class));
-    }
-
-    @Test
     void should_ValidateRestClientInjection_When_ServiceConstructed() {
-        // Validates Bug #8 fix: RestClient.Builder is injected
-
-        // Assert
+        // Validates RestClient.Builder is injected
         verify(restClientBuilder).baseUrl("https://api.groq.com");
         verify(restClientBuilder, times(2)).defaultHeader(anyString(), anyString());
         verify(restClientBuilder).build();
-    }
-
-    @Test
-    void should_LogError_When_ProjectGenerationFails() {
-        // Arrange
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Fallback")
-                .description("Error fallback")
-                .build();
-
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
-        when(restClient.post()).thenThrow(new RuntimeException("Network timeout"));
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Topic");
-
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.template()).isNotNull();
-        // Error should be logged (validated by @Slf4j, can't assert logs in unit test)
-    }
-
-    @Test
-    void should_SaveGeneratedTemplate_When_AIReturnsValidJson() {
-        // Arrange
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Collaborative Mini Project")
-                .description("Full description with tasks")
-                .build();
-
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Productivity");
-
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.template()).isNotNull();
-        verify(projectTemplateRepository).save(any(ProjectTemplate.class));
-    }
-
-    @Test
-    void should_UseNullTopic_When_TopicNotProvided() {
-        // Arrange
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Generic App")
-                .description("Description")
-                .build();
-
-        when(projectIdeaRepository.countActive()).thenReturn(0L);
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, null);
-
-        // Assert
-        assertThat(result).isNotNull();
-        verify(projectTemplateRepository).save(any(ProjectTemplate.class));
-    }
-
-    @Test
-    void should_HandleEmptyPageContent_When_NoIdeasFound() {
-        // Arrange
-        Page<ProjectIdea> emptyPage = new PageImpl<>(List.of());
-
-        ProjectTemplate fallbackTemplate = ProjectTemplate.builder()
-                .title("Creative App")
-                .description("Description")
-                .build();
-
-        when(projectIdeaRepository.countActive()).thenReturn(1L);
-        when(projectIdeaRepository.findAllActivePaged(any(PageRequest.class))).thenReturn(emptyPage);
-        when(projectTemplateRepository.save(any(ProjectTemplate.class))).thenReturn(fallbackTemplate);
-
-        // Act
-        GeneratedProject result = groqProjectGenerator.generateProject(frontendUser, backendUser, "Test");
-
-        // Assert
-        assertThat(result).isNotNull();
-        assertThat(result.idea()).isNull();
     }
 }

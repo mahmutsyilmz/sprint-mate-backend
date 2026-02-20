@@ -37,6 +37,6 @@ public class ProjectTemplate {
      * Detailed description of the project requirements and expectations.
      * Includes technical specifications, features to implement, and acceptance criteria.
      */
-    @Column(length = 2000)
+    @Column(length = 2000, columnDefinition = "NVARCHAR(2000)")
     private String description;
 }

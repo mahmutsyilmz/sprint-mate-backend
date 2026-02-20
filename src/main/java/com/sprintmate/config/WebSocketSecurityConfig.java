@@ -60,15 +60,15 @@ public class WebSocketSecurityConfig implements WebSocketMessageBrokerConfigurer
 
                 switch (command) {
                     case CONNECT:
-                        // Log connection attempt
-                        if (authentication == null) {
-                            log.warn("WebSocket CONNECT: no authentication found (session may not be established)");
-                        } else if (!authentication.isAuthenticated()) {
-                            log.warn("WebSocket CONNECT: user not authenticated");
-                        } else {
-                            log.info("WebSocket CONNECT accepted for user: {}", getGithubLogin(authentication));
+                        // Reject connection if not properly authenticated with OAuth2
+                        // This prevents infinite reconnect loops when session has expired
+                        if (authentication == null
+                                || !authentication.isAuthenticated()
+                                || !(authentication.getPrincipal() instanceof OAuth2User)) {
+                            log.warn("WebSocket CONNECT rejected: no valid OAuth2 session (session may have expired)");
+                            throw new IllegalStateException("Valid OAuth2 authentication required for WebSocket connection");
                         }
-                        // Allow connection - auth will be validated on SUBSCRIBE
+                        log.info("WebSocket CONNECT accepted for user: {}", getGithubLogin(authentication));
                         break;
 
                     case SUBSCRIBE:

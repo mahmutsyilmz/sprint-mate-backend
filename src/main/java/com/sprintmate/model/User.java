@@ -80,4 +80,11 @@ public class User {
      */
     @Column(name = "waiting_since")
     private LocalDateTime waitingSince;
+
+    /**
+     * User's project generation preferences (themes, difficulty, learning goals).
+     * Optional - users without preferences get default behavior.
+     */
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private UserPreference preference;
 }

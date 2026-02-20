@@ -18,6 +18,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,6 +41,7 @@ public class MatchController {
 
     private final MatchService matchService;
     private final UserService userService;
+    private final OAuth2AuthorizedClientService authorizedClientService;
 
     /**
      * Initiates the matching process or joins the waiting queue.
@@ -206,8 +209,16 @@ public class MatchController {
         // Find user by GitHub URL to get their UUID
         UserResponse currentUser = userService.findByGithubUrl(githubUrl);
 
-        // Complete the match
-        MatchCompletionResponse response = matchService.completeMatch(matchId, request, currentUser.id());
+        // Extract OAuth2 access token for authenticated GitHub API access
+        String accessToken = null;
+        OAuth2AuthorizedClient authorizedClient = authorizedClientService
+                .loadAuthorizedClient("github", oauth2User.getName());
+        if (authorizedClient != null) {
+            accessToken = authorizedClient.getAccessToken().getTokenValue();
+        }
+
+        // Complete the match with GitHub access token for README fetching
+        MatchCompletionResponse response = matchService.completeMatch(matchId, request, currentUser.id(), accessToken);
 
         return ResponseEntity.ok(response);
     }

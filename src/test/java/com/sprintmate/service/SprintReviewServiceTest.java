@@ -99,11 +99,11 @@ class SprintReviewServiceTest {
                 .readmeContent(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn("");
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn("");
         when(sprintReviewRepository.save(any(SprintReview.class))).thenReturn(emptyReview);
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isPresent();
@@ -127,12 +127,12 @@ class SprintReviewServiceTest {
                 .readmeContent(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn(readmeContent);
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn(readmeContent);
         when(matchProjectRepository.findByMatch(match)).thenReturn(Optional.empty());
         when(sprintReviewRepository.save(any(SprintReview.class))).thenReturn(emptyReview);
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isPresent();
@@ -160,12 +160,12 @@ class SprintReviewServiceTest {
                 .readmeContent(readmeContent)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn(readmeContent);
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn(readmeContent);
         when(matchProjectRepository.findByMatch(match)).thenReturn(Optional.of(matchProject));
         when(sprintReviewRepository.save(any(SprintReview.class))).thenReturn(basicReview);
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isPresent();
@@ -187,11 +187,11 @@ class SprintReviewServiceTest {
                 .readmeContent(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenThrow(new RuntimeException("GitHub API error"));
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenThrow(new RuntimeException("GitHub API error"));
         when(sprintReviewRepository.save(any(SprintReview.class))).thenReturn(emptyReview);
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isPresent();
@@ -208,12 +208,12 @@ class SprintReviewServiceTest {
                 .projectPromptContext(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn(longReadme);
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn(longReadme);
         when(matchProjectRepository.findByMatch(match)).thenReturn(Optional.of(matchProject));
         when(sprintReviewRepository.save(any(SprintReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        sprintReviewService.generateReview(match, repoUrl);
+        sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         ArgumentCaptor<SprintReview> reviewCaptor = ArgumentCaptor.forClass(SprintReview.class);
@@ -237,11 +237,11 @@ class SprintReviewServiceTest {
     @Test
     void should_ReturnEmptyOptional_When_EmptyReviewSaveFails() {
         // Arrange
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn("");
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn("");
         when(sprintReviewRepository.save(any(SprintReview.class))).thenThrow(new RuntimeException("Database error"));
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isEmpty();
@@ -257,12 +257,12 @@ class SprintReviewServiceTest {
                 .projectPromptContext(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn(readmeContent);
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn(readmeContent);
         when(matchProjectRepository.findByMatch(match)).thenReturn(Optional.of(matchProject));
         when(sprintReviewRepository.save(any(SprintReview.class))).thenThrow(new RuntimeException("Database error"));
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isEmpty();
@@ -281,11 +281,11 @@ class SprintReviewServiceTest {
                 .readmeContent(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn(null);
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn(null);
         when(sprintReviewRepository.save(any(SprintReview.class))).thenReturn(emptyReview);
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isPresent();
@@ -324,17 +324,17 @@ class SprintReviewServiceTest {
                 .readmeContent(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn(readmeContent);
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn(readmeContent);
         when(matchProjectRepository.findByMatch(match)).thenReturn(Optional.of(matchProject));
         when(sprintReviewRepository.save(any(SprintReview.class))).thenReturn(fallbackReview);
 
         // Act
-        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl);
+        Optional<SprintReview> result = sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         assertThat(result).isPresent();
         // Should attempt AI review but fall back on error
-        verify(gitHubService).fetchReadme(repoUrl);
+        verify(gitHubService).fetchReadme(eq(repoUrl), any());
         verify(matchProjectRepository).findByMatch(match);
     }
 
@@ -348,12 +348,12 @@ class SprintReviewServiceTest {
                 .projectPromptContext(null)
                 .build();
 
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn(readmeContent);
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn(readmeContent);
         when(matchProjectRepository.findByMatch(match)).thenReturn(Optional.of(matchProject));
         when(sprintReviewRepository.save(any(SprintReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        sprintReviewService.generateReview(match, repoUrl);
+        sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         ArgumentCaptor<SprintReview> reviewCaptor = ArgumentCaptor.forClass(SprintReview.class);
@@ -371,11 +371,11 @@ class SprintReviewServiceTest {
     @Test
     void should_SaveReviewWithZeroScore_When_EmptyReviewCreated() {
         // Arrange
-        when(gitHubService.fetchReadme(repoUrl)).thenReturn("");
+        when(gitHubService.fetchReadme(eq(repoUrl), any())).thenReturn("");
         when(sprintReviewRepository.save(any(SprintReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        sprintReviewService.generateReview(match, repoUrl);
+        sprintReviewService.generateReview(match, repoUrl, null);
 
         // Assert
         ArgumentCaptor<SprintReview> reviewCaptor = ArgumentCaptor.forClass(SprintReview.class);

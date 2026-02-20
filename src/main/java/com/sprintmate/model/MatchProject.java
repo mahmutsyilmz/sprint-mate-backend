@@ -44,20 +44,34 @@ public class MatchProject {
     private ProjectTemplate projectTemplate;
 
     /**
-     * Reference to the project idea used to generate this project.
-     * Preserved for AI review to compare submission against original concept.
+     * @deprecated Use archetype + theme instead. Kept for backward compatibility.
      */
+    @Deprecated
     @ManyToOne
     @JoinColumn(name = "project_idea_id")
     private ProjectIdea projectIdea;
 
     /**
-     * @deprecated Use projectIdea instead. Kept for backward compatibility.
+     * @deprecated Use archetype + theme instead. Kept for backward compatibility.
      */
     @Deprecated
     @ManyToOne
     @JoinColumn(name = "project_prompt_context_id")
     private ProjectPromptContext projectPromptContext;
+
+    /**
+     * The archetype used to generate this project (e.g., CRUD_APP, REAL_TIME_APP).
+     */
+    @ManyToOne
+    @JoinColumn(name = "archetype_id")
+    private ProjectArchetype archetype;
+
+    /**
+     * The theme used to generate this project (e.g., finance, health).
+     */
+    @ManyToOne
+    @JoinColumn(name = "theme_id")
+    private ProjectTheme theme;
 
     /**
      * The date when work on this project should begin.

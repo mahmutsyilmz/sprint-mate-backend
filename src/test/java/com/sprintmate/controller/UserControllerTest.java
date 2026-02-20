@@ -59,7 +59,8 @@ class UserControllerTest {
                 null,
                 "FRONTEND",
                 null,
-                new HashSet<>()
+                new HashSet<>(),
+                null
         );
 
         when(userService.findByGithubUrl(anyString())).thenReturn(mockResponse);
@@ -124,7 +125,8 @@ class UserControllerTest {
                 "Test Surname",
                 "BACKEND",
                 "Software Developer",
-                new HashSet<>()
+                new HashSet<>(),
+                null
         );
 
         when(userService.findByGithubUrl("https://github.com/testuser")).thenReturn(mockResponse);
@@ -179,7 +181,8 @@ class UserControllerTest {
                 "Updated Name",
                 "Updated bio",
                 "BACKEND",
-                new HashSet<>()
+                new HashSet<>(),
+                null
         );
 
         UUID userId = UUID.randomUUID();
@@ -190,7 +193,8 @@ class UserControllerTest {
                 null,
                 "FRONTEND",
                 null,
-                new HashSet<>()
+                new HashSet<>(),
+                null
         );
 
         UserResponse updatedUser = new UserResponse(
@@ -200,7 +204,8 @@ class UserControllerTest {
                 null,
                 "BACKEND",
                 "Updated bio",
-                new HashSet<>()
+                new HashSet<>(),
+                null
         );
 
         when(userService.findByGithubUrl("https://github.com/testuser")).thenReturn(currentUser);
@@ -236,7 +241,8 @@ class UserControllerTest {
                 null,
                 null,
                 null,
-                new HashSet<>()
+                new HashSet<>(),
+                null
         );
 
         when(userService.findByGithubUrl(expectedGithubUrl)).thenReturn(mockResponse);

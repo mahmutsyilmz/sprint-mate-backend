@@ -10,6 +10,8 @@ import com.sprintmate.model.*;
 import com.sprintmate.repository.MatchParticipantRepository;
 import com.sprintmate.repository.MatchProjectRepository;
 import com.sprintmate.repository.MatchRepository;
+import com.sprintmate.repository.ProjectThemeRepository;
+import com.sprintmate.repository.UserPreferenceRepository;
 import com.sprintmate.repository.UserRepository;
 import com.sprintmate.util.TestDataBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +51,12 @@ class UserServiceTest {
     @Mock
     private MatchProjectRepository matchProjectRepository;
 
+    @Mock
+    private UserPreferenceRepository userPreferenceRepository;
+
+    @Mock
+    private ProjectThemeRepository projectThemeRepository;
+
     @InjectMocks
     private UserService userService;
 
@@ -73,7 +81,8 @@ class UserServiceTest {
                 testUser.getSurname(),
                 "FRONTEND",
                 testUser.getBio(),
-                testUser.getSkills()
+                testUser.getSkills(),
+                null
         );
 
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -106,7 +115,8 @@ class UserServiceTest {
                 testUser.getSurname(),
                 "BACKEND",
                 testUser.getBio(),
-                testUser.getSkills()
+                testUser.getSkills(),
+                null
         );
 
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -170,7 +180,8 @@ class UserServiceTest {
                 testUser.getSurname(),
                 "BACKEND",
                 testUser.getBio(),
-                testUser.getSkills()
+                testUser.getSkills(),
+                null
         );
 
         when(userRepository.findByGithubUrl(githubUrl)).thenReturn(Optional.of(testUser));
@@ -206,7 +217,8 @@ class UserServiceTest {
                 "John Updated",
                 "Senior Backend Developer",
                 "FRONTEND",
-                newSkills
+                newSkills,
+                null
         );
 
         testUser.setSkills(new HashSet<>(Set.of("Old Skill")));
@@ -236,6 +248,7 @@ class UserServiceTest {
                 "John",
                 "Developer",
                 null, // No role provided
+                null,
                 null
         );
 
@@ -265,6 +278,7 @@ class UserServiceTest {
                 "New Name",
                 null, // Bio not provided
                 null,
+                null,
                 null
         );
 
@@ -293,6 +307,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 "Required Name", // Name is required in DTO validation
                 "New bio text",
+                null,
                 null,
                 null
         );
@@ -324,7 +339,8 @@ class UserServiceTest {
                 "John",
                 null,
                 null,
-                newSkills
+                newSkills,
+                null
         );
 
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));

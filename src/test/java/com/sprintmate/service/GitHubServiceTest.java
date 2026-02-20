@@ -46,6 +46,7 @@ class GitHubServiceTest {
         lenient().when(restClientBuilder.build()).thenReturn(restClient);
         lenient().when(restClient.get()).thenReturn(requestHeadersUriSpec);
         lenient().when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersUriSpec);
+        lenient().when(requestHeadersUriSpec.header(anyString(), any(String[].class))).thenReturn(requestHeadersUriSpec);
         lenient().when(requestHeadersUriSpec.retrieve()).thenReturn(responseSpec);
 
         gitHubService = new GitHubService(restClientBuilder);
@@ -60,7 +61,7 @@ class GitHubServiceTest {
         when(responseSpec.body(String.class)).thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isEqualTo(expectedContent);
@@ -87,7 +88,7 @@ class GitHubServiceTest {
                 .thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isEqualTo(expectedContent);
@@ -113,7 +114,7 @@ class GitHubServiceTest {
                 ));
 
         // Act & Assert
-        assertThatThrownBy(() -> gitHubService.fetchReadme(repoUrl))
+        assertThatThrownBy(() -> gitHubService.fetchReadme(repoUrl, null))
                 .isInstanceOf(ReadmeNotFoundException.class)
                 .hasMessageContaining("owner")
                 .hasMessageContaining("repo");
@@ -128,7 +129,7 @@ class GitHubServiceTest {
         String invalidUrl = "not-a-github-url";
 
         // Act & Assert
-        assertThatThrownBy(() -> gitHubService.fetchReadme(invalidUrl))
+        assertThatThrownBy(() -> gitHubService.fetchReadme(invalidUrl, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Invalid GitHub repository URL");
 
@@ -145,7 +146,7 @@ class GitHubServiceTest {
         when(responseSpec.body(String.class)).thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isNotNull();
@@ -163,7 +164,7 @@ class GitHubServiceTest {
         when(responseSpec.body(String.class)).thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isNotNull();
@@ -181,7 +182,7 @@ class GitHubServiceTest {
         when(responseSpec.body(String.class)).thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isNotNull();
@@ -203,7 +204,7 @@ class GitHubServiceTest {
                 ));
 
         // Act & Assert
-        assertThatThrownBy(() -> gitHubService.fetchReadme(repoUrl))
+        assertThatThrownBy(() -> gitHubService.fetchReadme(repoUrl, null))
                 .isInstanceOf(ReadmeNotFoundException.class);
     }
 
@@ -216,7 +217,7 @@ class GitHubServiceTest {
         when(responseSpec.body(String.class)).thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isNotNull();
@@ -234,7 +235,7 @@ class GitHubServiceTest {
         when(responseSpec.body(String.class)).thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isEqualTo(expectedContent);
@@ -251,7 +252,7 @@ class GitHubServiceTest {
         when(responseSpec.body(String.class)).thenReturn(expectedContent);
 
         // Act
-        String result = gitHubService.fetchReadme(repoUrl);
+        String result = gitHubService.fetchReadme(repoUrl, null);
 
         // Assert
         assertThat(result).isNotNull();
@@ -269,7 +270,40 @@ class GitHubServiceTest {
                 .thenThrow(new RuntimeException("Network error"));
 
         // Act & Assert
-        assertThatThrownBy(() -> gitHubService.fetchReadme(repoUrl))
+        assertThatThrownBy(() -> gitHubService.fetchReadme(repoUrl, null))
                 .isInstanceOf(ReadmeNotFoundException.class);
+    }
+
+    @Test
+    void should_SetAuthorizationHeader_When_AccessTokenProvided() {
+        // Arrange
+        String repoUrl = "https://github.com/user/repo";
+        String accessToken = "ghp_test_token_123";
+        String expectedContent = "# Private Repo README";
+
+        when(responseSpec.body(String.class)).thenReturn(expectedContent);
+
+        // Act
+        String result = gitHubService.fetchReadme(repoUrl, accessToken);
+
+        // Assert
+        assertThat(result).isEqualTo(expectedContent);
+        verify(requestHeadersUriSpec).header("Authorization", "token " + accessToken);
+    }
+
+    @Test
+    void should_NotSetAuthorizationHeader_When_AccessTokenIsNull() {
+        // Arrange
+        String repoUrl = "https://github.com/user/repo";
+        String expectedContent = "# Public Repo README";
+
+        when(responseSpec.body(String.class)).thenReturn(expectedContent);
+
+        // Act
+        String result = gitHubService.fetchReadme(repoUrl, null);
+
+        // Assert
+        assertThat(result).isEqualTo(expectedContent);
+        verify(requestHeadersUriSpec, never()).header(eq("Authorization"), anyString());
     }
 }

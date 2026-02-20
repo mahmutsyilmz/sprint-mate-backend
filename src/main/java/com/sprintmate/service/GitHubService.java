@@ -15,7 +15,8 @@ import java.util.regex.Pattern;
  * Service for fetching content from GitHub repositories.
  *
  * Business Intent:
- * Fetches README.md files from public GitHub repositories for AI sprint review.
+ * Fetches README.md files from GitHub repositories for AI sprint review.
+ * Uses the user's OAuth2 access token for authenticated access (supports private repos).
  * Tries main branch first, then falls back to master branch.
  */
 @Service
@@ -46,7 +47,8 @@ public class GitHubService {
      * Fetches the README.md content from a GitHub repository.
      * Tries main branch first, then falls back to master branch.
      *
-     * @param repoUrl The GitHub repository URL (e.g., https://github.com/user/repo)
+     * @param repoUrl     The GitHub repository URL (e.g., https://github.com/user/repo)
+     * @param accessToken The user's GitHub OAuth2 access token (nullable for public repos)
      * @return The README.md content as a string
      * @throws ReadmeNotFoundException if README cannot be fetched from either branch
      * @throws IllegalArgumentException if the URL format is invalid
@@ -56,7 +58,7 @@ public class GitHubService {
             maxAttempts = 3,
             backoff = @Backoff(delay = 1000, multiplier = 2)
     )
-    public String fetchReadme(String repoUrl) {
+    public String fetchReadme(String repoUrl, String accessToken) {
         log.info("Fetching README from repository: {}", repoUrl);
 
         // Parse the repository URL
@@ -72,46 +74,53 @@ public class GitHubService {
             repo = repo.substring(0, repo.length() - 4);
         }
 
+        boolean authenticated = accessToken != null && !accessToken.isBlank();
+
         // Try main branch first
-        String readme = tryFetchReadme(owner, repo, "main");
+        String readme = tryFetchReadme(owner, repo, "main", accessToken);
         if (readme != null) {
             log.info("Successfully fetched README from main branch for {}/{}", owner, repo);
             return readme;
         }
 
         // Fallback to master branch
-        readme = tryFetchReadme(owner, repo, "master");
+        readme = tryFetchReadme(owner, repo, "master", accessToken);
         if (readme != null) {
             log.info("Successfully fetched README from master branch for {}/{}", owner, repo);
             return readme;
         }
 
-        log.warn("README.md not found in repository {}/{} on main or master branch", owner, repo);
+        log.warn("README.md not found in repository {}/{} on main or master branch (authenticated: {})",
+                owner, repo, authenticated);
         throw new ReadmeNotFoundException(owner, repo);
     }
 
     /**
      * Attempts to fetch README.md from a specific branch.
      *
-     * @param owner  Repository owner
-     * @param repo   Repository name
-     * @param branch Branch name
+     * @param owner       Repository owner
+     * @param repo        Repository name
+     * @param branch      Branch name
+     * @param accessToken GitHub OAuth2 access token (nullable)
      * @return README content or null if not found
      */
-    private String tryFetchReadme(String owner, String repo, String branch) {
+    private String tryFetchReadme(String owner, String repo, String branch, String accessToken) {
         String url = String.format("%s/%s/%s/%s/README.md", RAW_GITHUB_URL, owner, repo, branch);
 
         try {
-            String content = restClient.get()
-                    .uri(url)
-                    .retrieve()
-                    .body(String.class);
+            var request = restClient.get().uri(url);
+
+            if (accessToken != null && !accessToken.isBlank()) {
+                request = request.header("Authorization", "token " + accessToken);
+            }
+
+            String content = request.retrieve().body(String.class);
             return content;
         } catch (HttpClientErrorException.NotFound e) {
             log.debug("README.md not found at {} for {}/{}", branch, owner, repo);
             return null;
         } catch (HttpClientErrorException.Forbidden e) {
-            log.warn("Access forbidden for {}/{} - repository may be private", owner, repo);
+            log.warn("Access forbidden for {}/{} on branch {} - token may lack repo scope", owner, repo, branch);
             return null;
         } catch (Exception e) {
             log.error("Error fetching README from {} branch for {}/{}: {}", branch, owner, repo, e.getMessage());

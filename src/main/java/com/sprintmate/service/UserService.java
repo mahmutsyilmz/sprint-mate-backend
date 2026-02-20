@@ -1,5 +1,6 @@
 package com.sprintmate.service;
 
+import com.sprintmate.dto.UserPreferenceRequest;
 import com.sprintmate.dto.UserResponse;
 import com.sprintmate.dto.UserStatusResponse;
 import com.sprintmate.dto.UserUpdateRequest;
@@ -10,6 +11,8 @@ import com.sprintmate.model.*;
 import com.sprintmate.repository.MatchParticipantRepository;
 import com.sprintmate.repository.MatchProjectRepository;
 import com.sprintmate.repository.MatchRepository;
+import com.sprintmate.repository.ProjectThemeRepository;
+import com.sprintmate.repository.UserPreferenceRepository;
 import com.sprintmate.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +40,8 @@ public class UserService {
     private final MatchRepository matchRepository;
     private final MatchParticipantRepository matchParticipantRepository;
     private final MatchProjectRepository matchProjectRepository;
+    private final UserPreferenceRepository userPreferenceRepository;
+    private final ProjectThemeRepository projectThemeRepository;
 
     /**
      * Updates the role of a user.
@@ -136,6 +141,11 @@ public class UserService {
         if (request.skills() != null) {
             user.getSkills().clear();
             user.getSkills().addAll(request.skills());
+        }
+
+        // Update preferences if provided
+        if (request.preference() != null) {
+            updatePreference(user, request.preference());
         }
 
         User savedUser = userRepository.save(user);
@@ -245,6 +255,27 @@ public class UserService {
             true,
             activeMatchInfo
         );
+    }
+
+    /**
+     * Updates or creates user preferences.
+     */
+    private void updatePreference(User user, UserPreferenceRequest prefRequest) {
+        UserPreference pref = userPreferenceRepository.findByUserId(user.getId())
+                .orElse(UserPreference.builder().user(user).build());
+
+        pref.setDifficultyPreference(prefRequest.difficultyPreference());
+        pref.setLearningGoals(prefRequest.learningGoals());
+
+        if (prefRequest.preferredThemeCodes() != null) {
+            var themes = new java.util.HashSet<>(
+                    projectThemeRepository.findByCodeIn(prefRequest.preferredThemeCodes())
+            );
+            pref.setPreferredThemes(themes);
+        }
+
+        userPreferenceRepository.save(pref);
+        user.setPreference(pref);
     }
 
     /**

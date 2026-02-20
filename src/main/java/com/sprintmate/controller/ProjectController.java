@@ -1,7 +1,9 @@
 package com.sprintmate.controller;
 
 import com.sprintmate.dto.ProjectTemplateResponse;
+import com.sprintmate.dto.ProjectThemeResponse;
 import com.sprintmate.mapper.ProjectMapper;
+import com.sprintmate.repository.ProjectThemeRepository;
 import com.sprintmate.service.ProjectService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -33,6 +35,7 @@ public class ProjectController {
 
     private final ProjectService projectService;
     private final ProjectMapper projectMapper;
+    private final ProjectThemeRepository projectThemeRepository;
 
     /**
      * Retrieves all available project templates.
@@ -64,5 +67,22 @@ public class ProjectController {
         var templates = projectService.getAllTemplates();
         var response = projectMapper.toResponseList(templates);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Retrieves all active project themes.
+     * Used by the frontend to populate the theme selector in profile editing.
+     */
+    @GetMapping("/themes")
+    @Operation(
+        summary = "Get all active project themes",
+        description = "Returns available themes for user preference selection."
+    )
+    @ApiResponse(responseCode = "200", description = "Themes retrieved successfully")
+    public ResponseEntity<List<ProjectThemeResponse>> getAvailableThemes() {
+        var themes = projectThemeRepository.findByActiveTrue().stream()
+                .map(t -> new ProjectThemeResponse(t.getCode(), t.getDisplayName()))
+                .toList();
+        return ResponseEntity.ok(themes);
     }
 }
