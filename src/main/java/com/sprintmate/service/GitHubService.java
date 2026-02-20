@@ -29,8 +29,14 @@ public class GitHubService {
             "^https?://github\\.com/([^/]+)/([^/]+)/?.*$"
     );
 
-    public GitHubService() {
-        this.restClient = RestClient.builder()
+    /**
+     * Constructor with RestClient.Builder injection for testability.
+     * Allows mocking RestClient in unit tests.
+     *
+     * @param restClientBuilder Injected RestClient.Builder from Spring context
+     */
+    public GitHubService(RestClient.Builder restClientBuilder) {
+        this.restClient = restClientBuilder
                 .defaultHeader("Accept", "text/plain")
                 .defaultHeader("User-Agent", "SprintMate/1.0")
                 .build();

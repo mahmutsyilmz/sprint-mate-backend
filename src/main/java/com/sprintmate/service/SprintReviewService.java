@@ -44,12 +44,13 @@ public class SprintReviewService {
     public SprintReviewService(
             @Value("${groq.api-key}") String apiKey,
             @Value("${groq.base-url}") String baseUrl,
+            RestClient.Builder restClientBuilder,
             GitHubService gitHubService,
             SprintReviewRepository sprintReviewRepository,
             MatchProjectRepository matchProjectRepository,
             ObjectMapper objectMapper) {
 
-        this.groqRestClient = RestClient.builder()
+        this.groqRestClient = restClientBuilder
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .defaultHeader("Content-Type", "application/json")

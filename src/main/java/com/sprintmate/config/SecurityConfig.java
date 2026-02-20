@@ -13,13 +13,15 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import java.util.Arrays;
 import java.util.List;
 
 /**
  * Security configuration for Sprint Mate application.
  * Configures GitHub OAuth2 authentication as the primary login mechanism.
- * 
+ *
  * MVP Strategy: Secure by default - all endpoints require authentication
  * except explicitly whitelisted public paths (root, error pages, H2 console).
  */
@@ -30,21 +32,8 @@ public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
 
-    /**
-     * Configures the security filter chain with OAuth2 login.
-     * 
-     * Business Intent:
-     * - Public access to root ("/") for health checks and landing page
-     * - Public access to error pages for proper error display to unauthenticated users
-     * - Public access to H2 console for development database inspection
-     * - All other endpoints require authentication via GitHub OAuth2
-     *
-     * @param http HttpSecurity builder
-     * @return Configured SecurityFilterChain
-     * @throws Exception if configuration fails
-     */
-    // Frontend URL for redirects after OAuth
-    private static final String FRONTEND_URL = "http://localhost:5173";
+    @Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -59,6 +48,8 @@ public class SecurityConfig {
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 // WebSocket endpoints - permitAll for HTTP handshake, auth handled at STOMP level
                 .requestMatchers("/ws/**", "/ws-sockjs/**").permitAll()
+                // Actuator health endpoint - accessible for load balancer health checks
+                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
@@ -69,7 +60,7 @@ public class SecurityConfig {
                     .userService(customOAuth2UserService)
                 )
                 // Redirect to frontend after successful login
-                .defaultSuccessUrl(FRONTEND_URL + "/role-select", true)
+                .defaultSuccessUrl(frontendUrl + "/role-select", true)
             )
             // Configure logout for API-based session management
             // Returns HTTP 200 OK instead of redirecting - frontend handles routing
@@ -101,7 +92,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(FRONTEND_URL));
+        configuration.setAllowedOrigins(List.of(frontendUrl));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true); // Important for session cookies

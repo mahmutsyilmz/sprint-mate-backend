@@ -118,9 +118,13 @@ public class UserService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        // Update allowed fields
-        user.setName(request.name());
-        user.setBio(request.bio());
+        // Update allowed fields with null checks
+        if (request.name() != null) {
+            user.setName(request.name());
+        }
+        if (request.bio() != null) {
+            user.setBio(request.bio());
+        }
         
         // Update role if provided
         if (request.role() != null && !request.role().isBlank()) {

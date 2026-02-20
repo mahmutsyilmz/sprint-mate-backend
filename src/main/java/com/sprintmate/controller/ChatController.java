@@ -12,6 +12,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -39,9 +42,11 @@ public class ChatController {
     private final ChatService chatService;
     private final UserRepository userRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final Validator validator;
 
     /**
      * WebSocket endpoint for sending chat messages.
+     * Messages are validated manually since @Valid is not auto-enforced on @MessageMapping.
      * Messages are saved to DB and broadcast to all subscribers of the match topic.
      *
      * @param request   The chat message request
@@ -49,6 +54,13 @@ public class ChatController {
      */
     @MessageMapping("/chat.send")
     public void sendMessage(@Payload ChatMessageRequest request, Principal principal) {
+        // Manual validation - @Valid is not enforced on WebSocket @MessageMapping
+        Set<ConstraintViolation<ChatMessageRequest>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            log.warn("Invalid chat message rejected: {}", violations.iterator().next().getMessage());
+            return;
+        }
+
         UUID senderId = getUserIdFromPrincipal(principal);
         if (senderId == null) {
             log.warn("Could not resolve sender ID from principal");

@@ -1,5 +1,6 @@
 package com.sprintmate.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sprintmate.dto.MatchCompletionRequest;
 import com.sprintmate.dto.MatchCompletionResponse;
 import com.sprintmate.dto.MatchResponse;
@@ -50,6 +51,7 @@ public class MatchService {
     private final ProjectService projectService;
     private final ProjectGeneratorService projectGeneratorService;
     private final SprintReviewService sprintReviewService;
+    private final ObjectMapper objectMapper; // Injected for JSON parsing
 
     private static final int PROJECT_DURATION_DAYS = 7;
 
@@ -157,11 +159,18 @@ public class MatchService {
 
     /**
      * Calculates user's position in the waiting queue.
+     * Counts how many users with the same role joined before this user.
      */
     private int getQueuePosition(User user) {
-        // Count how many users with the same role joined the queue before this user
-        // For simplicity, we return 1 if they're in queue (can be enhanced later)
-        return 1;
+        if (user.getWaitingSince() == null) {
+            return 0; // Not in queue
+        }
+
+        // Count users ahead in queue + 1 (for this user's position)
+        return userRepository.countByRoleAndWaitingSinceBefore(
+            user.getRole(),
+            user.getWaitingSince()
+        ) + 1;
     }
 
     /**
@@ -311,8 +320,7 @@ public class MatchService {
             return List.of();
         }
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            return mapper.readValue(json, mapper.getTypeFactory().constructCollectionType(List.class, String.class));
+            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
         } catch (Exception e) {
             log.warn("Failed to parse JSON array: {}", json);
             return List.of();

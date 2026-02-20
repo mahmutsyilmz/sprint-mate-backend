@@ -48,11 +48,12 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
     public GroqProjectGenerator(
             @Value("${groq.api-key}") String apiKey,
             @Value("${groq.base-url}") String baseUrl,
+            RestClient.Builder restClientBuilder,
             ProjectTemplateRepository projectTemplateRepository,
             ProjectIdeaRepository projectIdeaRepository,
             ObjectMapper objectMapper) {
 
-        this.groqRestClient = RestClient.builder()
+        this.groqRestClient = restClientBuilder
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .defaultHeader("Content-Type", "application/json")

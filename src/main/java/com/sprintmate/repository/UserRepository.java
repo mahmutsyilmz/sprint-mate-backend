@@ -1,5 +1,6 @@
 package com.sprintmate.repository;
 
+import com.sprintmate.model.RoleName;
 import com.sprintmate.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -64,4 +65,15 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * @return true if user has a waiting_since timestamp set
      */
     boolean existsByIdAndWaitingSinceIsNotNull(UUID userId);
+
+    /**
+     * Counts users with the same role who joined the queue before the given user.
+     * Used for calculating queue position.
+     *
+     * @param role The user's role
+     * @param waitingSince The user's waiting timestamp
+     * @return Count of users ahead in queue
+     */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.role = :role AND u.waitingSince < :waitingSince AND u.waitingSince IS NOT NULL")
+    int countByRoleAndWaitingSinceBefore(@Param("role") RoleName role, @Param("waitingSince") java.time.LocalDateTime waitingSince);
 }

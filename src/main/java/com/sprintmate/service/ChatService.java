@@ -15,6 +15,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.HtmlUtils;
 
 import java.util.Collections;
 import java.util.List;
@@ -60,12 +61,15 @@ public class ChatService {
 
         String senderName = buildDisplayName(sender);
 
+        // Sanitize content to prevent stored XSS
+        String sanitizedContent = HtmlUtils.htmlEscape(request.content());
+
         // Create and save the message
         ChatMessage message = ChatMessage.builder()
             .matchId(request.matchId())
             .senderId(senderId)
             .senderName(senderName)
-            .content(request.content())
+            .content(sanitizedContent)
             .build();
 
         ChatMessage savedMessage = chatMessageRepository.save(message);
