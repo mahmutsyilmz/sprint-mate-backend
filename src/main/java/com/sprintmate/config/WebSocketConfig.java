@@ -1,17 +1,22 @@
 package com.sprintmate.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import org.springframework.web.socket.server.HandshakeInterceptor;
+import org.springframework.web.socket.server.support.DefaultHandshakeHandler;
 
 import jakarta.servlet.http.HttpSession;
+import java.security.Principal;
 import java.util.Map;
 
 /**
@@ -22,7 +27,8 @@ import java.util.Map;
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private static final String FRONTEND_URL = "http://localhost:5173";
+    @Value("${app.frontend-url:http://localhost:5173}")
+    private String frontendUrl;
 
     /**
      * Configures the message broker for STOMP messaging.
@@ -47,19 +53,22 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // Native WebSocket endpoint (no SockJS)
         // Use setAllowedOriginPatterns for credentials support
         registry.addEndpoint("/ws")
-            .setAllowedOriginPatterns("*")
-            .addInterceptors(httpSessionHandshakeInterceptor());
+            .setAllowedOriginPatterns(frontendUrl)
+            .addInterceptors(httpSessionHandshakeInterceptor())
+            .setHandshakeHandler(authenticationHandshakeHandler());
 
         // SockJS fallback endpoint
         registry.addEndpoint("/ws-sockjs")
-            .setAllowedOriginPatterns("*")
+            .setAllowedOriginPatterns(frontendUrl)
             .addInterceptors(httpSessionHandshakeInterceptor())
+            .setHandshakeHandler(authenticationHandshakeHandler())
             .withSockJS();
     }
 
     /**
-     * Handshake interceptor to copy HTTP session to WebSocket session.
-     * This ensures authentication information is available in WebSocket messages.
+     * Handshake interceptor that copies the HTTP session and Spring Security
+     * Authentication into WebSocket session attributes.
+     * The Authentication is stored so the STOMP interceptor can access it.
      */
     private HandshakeInterceptor httpSessionHandshakeInterceptor() {
         return new HandshakeInterceptor() {
@@ -72,6 +81,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         attributes.put("HTTP_SESSION_ID", session.getId());
                     }
                 }
+                // Store the current authentication for STOMP-level access
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.isAuthenticated()) {
+                    attributes.put("SPRING_SECURITY_AUTHENTICATION", auth);
+                }
                 return true;
             }
 
@@ -79,6 +93,26 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                       WebSocketHandler wsHandler, Exception exception) {
                 // No-op
+            }
+        };
+    }
+
+    /**
+     * Custom handshake handler that exposes the Spring Security Authentication
+     * as the WebSocket session's Principal, making it accessible via
+     * StompHeaderAccessor.getUser() in STOMP interceptors.
+     */
+    private DefaultHandshakeHandler authenticationHandshakeHandler() {
+        return new DefaultHandshakeHandler() {
+            @Override
+            protected Principal determineUser(ServerHttpRequest request,
+                                             WebSocketHandler wsHandler,
+                                             Map<String, Object> attributes) {
+                Authentication auth = (Authentication) attributes.get("SPRING_SECURITY_AUTHENTICATION");
+                if (auth != null) {
+                    return auth;
+                }
+                return super.determineUser(request, wsHandler, attributes);
             }
         };
     }
