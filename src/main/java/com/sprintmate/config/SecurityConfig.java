@@ -21,6 +21,10 @@ import org.springframework.beans.factory.annotation.Value;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.io.IOException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.Authentication;
 
 /**
  * Security configuration for Sprint Mate application.
@@ -40,9 +44,8 @@ public class SecurityConfig {
     private String frontendUrl;
 
     // Comma-separated list of allowed CORS origins.
-    // In production, set FRONTEND_URL (or APP_CORS_ALLOWED_ORIGINS) to Vercel domain.
-    // Example: https://sprint-mate.vercel.app,https://sprint-mate-git-main.vercel.app
-    @Value("${app.cors.allowed-origins:${app.frontend-url:http://localhost:5173}}")
+    // In production, set FRONTEND_URL in Railway to the Vercel domain.
+    @Value("${app.cors.allowed-origins:http://localhost:5173}")
     private String corsAllowedOriginsConfig;
 
     @Bean
@@ -69,8 +72,11 @@ public class SecurityConfig {
                 .userInfoEndpoint(userInfo -> userInfo
                     .userService(customOAuth2UserService)
                 )
-                // Redirect to frontend after successful login
-                .defaultSuccessUrl(frontendUrl + "/role-select", true)
+                // Redirect to frontend after successful login.
+                // Uses a success handler (evaluated at request time, not at bean init)
+                // so the app starts even before FRONTEND_URL env var is configured.
+                .successHandler((HttpServletRequest req, HttpServletResponse res, Authentication auth)
+                    -> res.sendRedirect(frontendUrl + "/role-select"))
             )
             // Configure logout for API-based session management
             // Returns HTTP 200 OK instead of redirecting - frontend handles routing
