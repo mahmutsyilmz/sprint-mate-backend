@@ -39,8 +39,8 @@
         </dependency>
 
         <dependency>
-            <groupId>com.microsoft.sqlserver</groupId>
-            <artifactId>mssql-jdbc</artifactId>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
 
@@ -126,10 +126,7 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-sqlserver</artifactId>
-        </dependency>
+
 
         <!-- H2 Database - For development/testing -->
         <dependency>

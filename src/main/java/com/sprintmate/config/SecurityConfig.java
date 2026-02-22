@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Security configuration for Sprint Mate application.
@@ -37,6 +38,12 @@ public class SecurityConfig {
 
     @Value("${app.frontend-url:http://localhost:5173}")
     private String frontendUrl;
+
+    // Comma-separated list of allowed CORS origins.
+    // In production, set FRONTEND_URL (or APP_CORS_ALLOWED_ORIGINS) to Vercel domain.
+    // Example: https://sprint-mate.vercel.app,https://sprint-mate-git-main.vercel.app
+    @Value("${app.cors.allowed-origins:${app.frontend-url:http://localhost:5173}}")
+    private String corsAllowedOriginsConfig;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -98,16 +105,22 @@ public class SecurityConfig {
 
     /**
      * CORS configuration for frontend access.
-     * Allows the frontend origin to make cross-origin requests to the backend.
+     * Allows one or more frontend origins (comma-separated) to make cross-origin
+     * requests to the backend. Supports both local dev and Vercel production URLs.
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+        List<String> origins = Arrays.stream(corsAllowedOriginsConfig.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(frontendUrl));
+        configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true); // Important for session cookies
-        
+        configuration.setAllowCredentials(true); // Required for JSESSIONID session cookies
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

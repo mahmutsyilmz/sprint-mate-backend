@@ -1,45 +1,45 @@
 -- =====================================================
 -- Sprint Mate - V1 Initial Schema
--- Target: Microsoft SQL Server
+-- Target: PostgreSQL
 -- =====================================================
 
 -- Users
 CREATE TABLE users (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    github_url NVARCHAR(500),
-    name NVARCHAR(255),
-    surname NVARCHAR(255),
-    role NVARCHAR(50),
-    bio NVARCHAR(255),
-    waiting_since DATETIME2(6),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    github_url VARCHAR(500),
+    name VARCHAR(255),
+    surname VARCHAR(255),
+    role VARCHAR(50),
+    bio VARCHAR(255),
+    waiting_since TIMESTAMP,
     CONSTRAINT pk_users PRIMARY KEY (id)
 );
 
 -- User skills (ElementCollection)
 CREATE TABLE user_skills (
-    user_id UNIQUEIDENTIFIER NOT NULL,
-    skill NVARCHAR(255),
+    user_id UUID NOT NULL,
+    skill VARCHAR(255),
     CONSTRAINT fk_user_skills_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_user_skills_user_id ON user_skills(user_id);
 
 -- Matches
 CREATE TABLE matches (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    status NVARCHAR(50) NOT NULL,
-    created_at DATETIME2(6) NOT NULL DEFAULT GETDATE(),
-    expires_at DATETIME2(6),
-    communication_link NVARCHAR(500),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    status VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    communication_link VARCHAR(500),
     CONSTRAINT pk_matches PRIMARY KEY (id)
 );
 CREATE INDEX idx_matches_status ON matches(status);
 
 -- Match participants
 CREATE TABLE match_participants (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    match_id UNIQUEIDENTIFIER NOT NULL,
-    user_id UNIQUEIDENTIFIER NOT NULL,
-    participant_role NVARCHAR(50) NOT NULL,
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    participant_role VARCHAR(50) NOT NULL,
     CONSTRAINT pk_match_participants PRIMARY KEY (id),
     CONSTRAINT fk_match_participants_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
     CONSTRAINT fk_match_participants_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -49,67 +49,67 @@ CREATE INDEX idx_match_participants_user_id ON match_participants(user_id);
 
 -- Project templates
 CREATE TABLE project_templates (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    title NVARCHAR(255) NOT NULL,
-    description NVARCHAR(2000),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    title VARCHAR(255) NOT NULL,
+    description VARCHAR(2000),
     CONSTRAINT pk_project_templates PRIMARY KEY (id)
 );
 
 -- Project ideas
 CREATE TABLE project_ideas (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    category NVARCHAR(100) NOT NULL,
-    name NVARCHAR(255) NOT NULL,
-    pitch NVARCHAR(500) NOT NULL,
-    core_concept NVARCHAR(1000) NOT NULL,
-    key_features NVARCHAR(1000) NOT NULL,
-    bonus_features NVARCHAR(500),
-    example_use_case NVARCHAR(500),
-    portfolio_value NVARCHAR(500),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    category VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    pitch VARCHAR(500) NOT NULL,
+    core_concept VARCHAR(1000) NOT NULL,
+    key_features VARCHAR(1000) NOT NULL,
+    bonus_features VARCHAR(500),
+    example_use_case VARCHAR(500),
+    portfolio_value VARCHAR(500),
     difficulty INT NOT NULL,
-    tags NVARCHAR(200),
-    active BIT NOT NULL DEFAULT 1,
-    created_at DATETIME2(6) NOT NULL DEFAULT GETDATE(),
+    tags VARCHAR(200),
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_project_ideas PRIMARY KEY (id)
 );
 CREATE INDEX idx_project_ideas_active ON project_ideas(active);
 
 -- Project prompt contexts
 CREATE TABLE project_prompt_contexts (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    industry NVARCHAR(100) NOT NULL,
-    sub_domain NVARCHAR(100),
-    company_stage NVARCHAR(50),
-    team_size NVARCHAR(50),
-    crisis_category NVARCHAR(100),
-    crisis_scenario NVARCHAR(2000),
-    urgency_level NVARCHAR(50),
-    primary_constraint NVARCHAR(100),
-    secondary_constraint NVARCHAR(100),
-    architecture_pattern NVARCHAR(100),
-    backend_stack NVARCHAR(200),
-    frontend_stack NVARCHAR(200),
-    database_requirement NVARCHAR(200),
-    infrastructure NVARCHAR(100),
-    budget_constraint NVARCHAR(50),
-    timeline NVARCHAR(50),
-    stakeholder_pressure NVARCHAR(500),
-    success_metric NVARCHAR(200),
-    legacy_system_issue NVARCHAR(500),
-    compliance_requirement NVARCHAR(200),
-    integration_challenge NVARCHAR(500),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    industry VARCHAR(100) NOT NULL,
+    sub_domain VARCHAR(100),
+    company_stage VARCHAR(50),
+    team_size VARCHAR(50),
+    crisis_category VARCHAR(100),
+    crisis_scenario VARCHAR(2000),
+    urgency_level VARCHAR(50),
+    primary_constraint VARCHAR(100),
+    secondary_constraint VARCHAR(100),
+    architecture_pattern VARCHAR(100),
+    backend_stack VARCHAR(200),
+    frontend_stack VARCHAR(200),
+    database_requirement VARCHAR(200),
+    infrastructure VARCHAR(100),
+    budget_constraint VARCHAR(50),
+    timeline VARCHAR(50),
+    stakeholder_pressure VARCHAR(500),
+    success_metric VARCHAR(200),
+    legacy_system_issue VARCHAR(500),
+    compliance_requirement VARCHAR(200),
+    integration_challenge VARCHAR(500),
     difficulty_score INT,
-    created_at DATETIME2(6) NOT NULL DEFAULT GETDATE(),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_project_prompt_contexts PRIMARY KEY (id)
 );
 
 -- Match projects
 CREATE TABLE match_projects (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    match_id UNIQUEIDENTIFIER NOT NULL,
-    project_template_id UNIQUEIDENTIFIER NOT NULL,
-    project_idea_id UNIQUEIDENTIFIER,
-    project_prompt_context_id UNIQUEIDENTIFIER,
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL,
+    project_template_id UUID NOT NULL,
+    project_idea_id UUID,
+    project_prompt_context_id UUID,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     CONSTRAINT pk_match_projects PRIMARY KEY (id),
@@ -122,10 +122,10 @@ CREATE INDEX idx_match_projects_match_id ON match_projects(match_id);
 
 -- Match completions
 CREATE TABLE match_completions (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    match_id UNIQUEIDENTIFIER NOT NULL,
-    completed_at DATETIME2(6) NOT NULL DEFAULT GETDATE(),
-    repo_url NVARCHAR(500),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL,
+    completed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    repo_url VARCHAR(500),
     CONSTRAINT pk_match_completions PRIMARY KEY (id),
     CONSTRAINT fk_match_completions_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE,
     CONSTRAINT uk_match_completions_match_id UNIQUE (match_id)
@@ -133,15 +133,15 @@ CREATE TABLE match_completions (
 
 -- Sprint reviews
 CREATE TABLE sprint_reviews (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    match_id UNIQUEIDENTIFIER NOT NULL,
-    repo_url NVARCHAR(500) NOT NULL,
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL,
+    repo_url VARCHAR(500) NOT NULL,
     score INT NOT NULL,
-    ai_feedback NVARCHAR(4000),
-    strengths NVARCHAR(2000),
-    missing_elements NVARCHAR(2000),
-    readme_content NVARCHAR(MAX),
-    created_at DATETIME2(6) NOT NULL DEFAULT GETDATE(),
+    ai_feedback VARCHAR(4000),
+    strengths VARCHAR(2000),
+    missing_elements VARCHAR(2000),
+    readme_content TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_sprint_reviews PRIMARY KEY (id),
     CONSTRAINT fk_sprint_reviews_match FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
 );
@@ -149,12 +149,12 @@ CREATE INDEX idx_sprint_reviews_match_id ON sprint_reviews(match_id);
 
 -- Chat messages
 CREATE TABLE chat_messages (
-    id UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
-    match_id UNIQUEIDENTIFIER NOT NULL,
-    sender_id UNIQUEIDENTIFIER NOT NULL,
-    sender_name NVARCHAR(255) NOT NULL,
-    content NVARCHAR(2000) NOT NULL,
-    created_at DATETIME2(6) NOT NULL DEFAULT GETDATE(),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL,
+    sender_id UUID NOT NULL,
+    sender_name VARCHAR(255) NOT NULL,
+    content VARCHAR(2000) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_chat_messages PRIMARY KEY (id)
 );
 CREATE INDEX idx_chat_messages_match_id ON chat_messages(match_id);
