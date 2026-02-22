@@ -2,7 +2,7 @@
 
 A Spring Boot backend for matching frontend and backend developers to build AI-generated collaborative sprint projects.
 
-**Last Updated:** 2026-02-21
+**Last Updated:** 2026-02-22
 
 ---
 
@@ -27,7 +27,7 @@ A Spring Boot backend for matching frontend and backend developers to build AI-g
 - **Session Persistence** — `/api/users/me/status` restores active match state on page refresh
 - **API Documentation** — Swagger UI (development profile only)
 - **Rate Limiting** — `RateLimitFilter` protects AI endpoints
-- **Database Migrations** — Flyway (MSSQL-compatible SQL)
+- **Database Migrations** — Flyway (PostgreSQL)
 - **Code Coverage** — JaCoCo with 50% minimum line threshold (build fails if not met)
 
 ### Pending
@@ -45,7 +45,7 @@ A Spring Boot backend for matching frontend and backend developers to build AI-g
 | Spring Boot | 3.2.1 | Framework |
 | Spring Security + OAuth2 Client | — | GitHub OAuth2 authentication |
 | Spring Data JPA + Hibernate | — | ORM / persistence |
-| Microsoft SQL Server | — | Production database |
+| PostgreSQL | 15+ | Production database (Neon free tier) |
 | H2 | — | Development / test database |
 | Flyway | — | Database migrations |
 | Spring WebSocket + STOMP | — | Real-time chat |
@@ -65,7 +65,7 @@ A Spring Boot backend for matching frontend and backend developers to build AI-g
 src/main/java/com/sprintmate/
 ├── SprintMateApplication.java
 ├── config/
-│   ├── SecurityConfig.java             # CORS, OAuth2, session management
+│   ├── SecurityConfig.java             # CORS (multi-origin), OAuth2, session management
 │   ├── WebSocketConfig.java            # STOMP endpoint registration (/ws, /ws-sockjs)
 │   ├── WebSocketSecurityConfig.java    # WebSocket session authentication
 │   ├── OpenApiConfig.java              # Swagger/SpringDoc configuration
@@ -174,7 +174,7 @@ src/test/java/com/sprintmate/
 - Maven 3.8+
 - GitHub OAuth App credentials
 - Groq API key (https://console.groq.com)
-- MSSQL Server (or use H2 for development — zero setup)
+- PostgreSQL 15+ (or use H2 for development — zero setup)
 
 ### Setup
 
@@ -184,16 +184,17 @@ git clone https://github.com/mahmutsyilmz/sprint-mate-backend.git
 cd sprint-mate-backend
 ```
 
-2. **Create `.env` file** in the project root:
+2. **Create `.env` file** in the project root (copy from `.env.example`):
 ```properties
 GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 GROQ_API_KEY=your-groq-api-key
-GROQ_BASE_URL=https://api.groq.com/openai/v1/chat/completions
+CLARIFAI_API_KEY=your-clarifai-api-key
 
-# Production MSSQL (optional — H2 is used in dev profile)
-DB_USERNAME=your-db-username
-DB_PASSWORD=your-db-password
+# PostgreSQL (defaults to localhost:5432/sprintmate if not set)
+DB_URL=jdbc:postgresql://localhost:5432/sprintmate
+DB_USERNAME=postgres
+DB_PASSWORD=your-password
 ```
 
 3. **Run the application**
@@ -211,7 +212,6 @@ DB_PASSWORD=your-db-password
 |---|---|
 | `http://localhost:8080` | Application root |
 | `http://localhost:8080/swagger-ui.html` | Swagger UI (dev only) |
-| `http://localhost:8080/h2-console` | H2 Console (dev only) — JDBC: `jdbc:h2:mem:sprintmate` |
 
 ### GitHub OAuth App Setup
 1. Go to GitHub → Settings → Developer settings → OAuth Apps → New OAuth App
@@ -227,7 +227,7 @@ DB_PASSWORD=your-db-password
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/oauth2/authorization/github` | Initiate GitHub OAuth login |
-| GET | `/api/auth/logout` | Logout and invalidate session |
+| POST | `/api/auth/logout` | Logout and invalidate session |
 
 ### Users
 | Method | Endpoint | Description |
@@ -266,16 +266,17 @@ DB_PASSWORD=your-db-password
 SYSTEM ARCHITECTURE
 ====================
 
-   Browser / Frontend (React SPA)
+   Browser / Frontend (React SPA — Vercel)
              |
     HTTPS / WebSocket (STOMP)
              |
    +---------+-----------+
    |    Spring Boot       |
+   |    (Railway)         |
    |                      |
    |  SecurityConfig      |      +--------------------------+
    |  (CORS, OAuth2,  )   |      |  Groq API (External)     |
-   |   Session)           |      |  Llama-3.3-70b-versatile |
+   |   SameSite=None)     |      |  Llama-3.3-70b-versatile |
    |  RateLimitFilter     |      |  - AI project generation |
    |                      |      |  - Sprint code review    |
    |  Controllers (4)     |----->+--------------------------+
@@ -303,8 +304,9 @@ SYSTEM ARCHITECTURE
              |
    +---------+------------+
    |  Database             |
-   |  H2 (dev)             |
-   |  MSSQL (production)   |
+   |  H2 (dev / test)      |
+   |  PostgreSQL (prod)    |
+   |  via Neon (free tier) |
    |  13+ tables           |
    |  Flyway migrations    |
    +-----------------------+
@@ -640,13 +642,57 @@ All tests use JUnit 5 + Mockito + AssertJ. Naming convention: `should_ExpectedBe
 | `GITHUB_CLIENT_ID` | Yes | GitHub OAuth App Client ID |
 | `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App Client Secret |
 | `GROQ_API_KEY` | Yes | Groq API key for AI features |
-| `GROQ_BASE_URL` | Yes | Groq API endpoint URL |
-| `DB_USERNAME` | Production | MSSQL database username |
-| `DB_PASSWORD` | Production | MSSQL database password |
+| `CLARIFAI_API_KEY` | Yes | Clarifai API key (primary AI) |
+| `DB_URL` | Production | PostgreSQL JDBC URL |
+| `DB_USERNAME` | Production | Database username |
+| `DB_PASSWORD` | Production | Database password |
+| `FRONTEND_URL` | Production | Vercel frontend URL (e.g. `https://sprint-mate.vercel.app`) |
+| `APP_CORS_ALLOWED_ORIGINS` | Optional | Comma-separated CORS origins (defaults to `FRONTEND_URL`) |
+| `PORT` | Optional | Server port (Railway sets this automatically) |
 
 ### Profiles
-- **Default (dev):** H2 in-memory database, Swagger UI enabled, H2 Console enabled
-- **Production:** MSSQL, Swagger disabled, secure session cookies
+
+| Profile | Database | Features |
+|---|---|---|
+| **default (dev)** | PostgreSQL (localhost) or H2 | Swagger UI, SQL logging, bot seed users, ddl-auto=update |
+| **prod** | PostgreSQL via env vars | Flyway migrations, SameSite=None cookies, no Swagger, ddl-auto=validate |
+
+Activate production profile: `SPRING_PROFILES_ACTIVE=prod`
+
+---
+
+## Deployment
+
+### Railway (Backend) + Neon (Database) + Vercel (Frontend)
+
+**Database — Neon PostgreSQL (free)**
+1. Create account at [neon.tech](https://neon.tech)
+2. Create project, note the connection string: `jdbc:postgresql://<host>.neon.tech/neondb?sslmode=require`
+
+**Backend — Railway (~$5/mo)**
+1. Connect GitHub repo at [railway.app](https://railway.app)
+2. Set root directory to `/` — Railway auto-detects the `Dockerfile`
+3. Add environment variables (see table above)
+4. Note your Railway domain: `https://<your-app>.up.railway.app`
+
+**GitHub OAuth App — Update Callback URL**
+- Homepage URL: `https://<your-vercel-app>.vercel.app`
+- Callback URL: `https://<your-railway-app>.up.railway.app/login/oauth2/code/github`
+
+**Frontend — Vercel (free)**
+See [sprint-mate-frontend](https://github.com/mahmutsyilmz/sprint-mate-frontend) README.
+
+### Docker Compose (Local Full-Stack)
+
+```bash
+# Copy and fill in .env.example
+cp .env.example ../docker-compose/.env
+
+# From the root of the monorepo
+docker compose up --build
+```
+
+Runs: PostgreSQL (5432) + Backend (8080) + Frontend/Nginx (3000)
 
 ---
 
