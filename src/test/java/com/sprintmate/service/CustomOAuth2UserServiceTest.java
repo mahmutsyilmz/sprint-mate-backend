@@ -4,17 +4,11 @@ import com.sprintmate.constant.GitHubConstants;
 import com.sprintmate.model.User;
 import com.sprintmate.repository.UserRepository;
 import com.sprintmate.util.TestDataBuilder;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.oauth2.client.registration.ClientRegistration;
-import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2UserAuthority;
@@ -34,50 +28,6 @@ class CustomOAuth2UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
-
-    @InjectMocks
-    private CustomOAuth2UserService customOAuth2UserService;
-
-    private OAuth2UserRequest userRequest;
-    private OAuth2User oauth2User;
-
-    @BeforeEach
-    void setUp() {
-        // Setup OAuth2 client registration (required for OAuth2UserRequest)
-        ClientRegistration clientRegistration = ClientRegistration.withRegistrationId("github")
-                .clientId("test-client-id")
-                .clientSecret("test-client-secret")
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
-                .authorizationUri("https://github.com/login/oauth/authorize")
-                .tokenUri("https://github.com/login/oauth/access_token")
-                .userInfoUri("https://api.github.com/user")
-                .userNameAttributeName("login")
-                .build();
-
-        // Setup OAuth2 access token
-        OAuth2AccessToken accessToken = new OAuth2AccessToken(
-                OAuth2AccessToken.TokenType.BEARER,
-                "test-token",
-                null,
-                null
-        );
-
-        // Setup OAuth2 user request
-        userRequest = new OAuth2UserRequest(clientRegistration, accessToken);
-
-        // Setup OAuth2 user with GitHub attributes
-        Map<String, Object> attributes = new HashMap<>();
-        attributes.put("login", "johndoe");
-        attributes.put("name", "John Doe");
-        attributes.put("id", 123456);
-
-        oauth2User = new DefaultOAuth2User(
-                List.of(new OAuth2UserAuthority(attributes)),
-                attributes,
-                "login"
-        );
-    }
 
     @Test
     void should_CreateNewUser_When_FirstTimeGitHubLogin() {

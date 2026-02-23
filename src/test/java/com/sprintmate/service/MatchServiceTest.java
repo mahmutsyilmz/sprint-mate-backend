@@ -61,6 +61,9 @@ class MatchServiceTest {
     private SprintReviewService sprintReviewService;
 
     @Mock
+    private EmailNotificationService emailNotificationService;
+
+    @Mock
     private ObjectMapper objectMapper;
 
     @InjectMocks
