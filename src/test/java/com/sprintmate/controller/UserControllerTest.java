@@ -157,6 +157,9 @@ class UserControllerTest {
                 null,
                 new HashSet<>(),
                 false,
+                null,
+                false,
+                null,
                 null
         );
 
