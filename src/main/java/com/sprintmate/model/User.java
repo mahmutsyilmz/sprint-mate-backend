@@ -36,6 +36,13 @@ public class User {
     private String githubUrl;
 
     /**
+     * User's email address, fetched from GitHub during OAuth2 login.
+     * Used for match notifications. May be null if GitHub email is unavailable.
+     */
+    @Column(name = "email")
+    private String email;
+
+    /**
      * User's first name.
      */
     private String name;

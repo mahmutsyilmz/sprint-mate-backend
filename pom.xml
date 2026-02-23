@@ -141,6 +141,12 @@
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
+
+        <!-- Spring Boot Mail Starter - For async email notifications -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

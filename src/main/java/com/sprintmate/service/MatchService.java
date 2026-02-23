@@ -52,6 +52,7 @@ public class MatchService {
     private final ProjectService projectService;
     private final ProjectGeneratorService projectGeneratorService;
     private final SprintReviewService sprintReviewService;
+    private final EmailNotificationService emailNotificationService;
     private final ObjectMapper objectMapper; // Injected for JSON parsing
 
     private static final int PROJECT_DURATION_DAYS = 7;
@@ -140,6 +141,22 @@ public class MatchService {
 
             log.info("Created match {} between {} and {} with project {}",
                      match.getId(), currentUserId, partner.getId(), matchProject.getProjectTemplate().getTitle());
+
+            // Notify both participants by email (async, non-blocking)
+            emailNotificationService.sendMatchNotification(
+                currentUser.getEmail(),
+                currentUser.getName(),
+                buildPartnerName(partner),
+                partner.getRole().name(),
+                matchProject.getProjectTemplate().getTitle()
+            );
+            emailNotificationService.sendMatchNotification(
+                partner.getEmail(),
+                buildPartnerName(partner),
+                currentUser.getName(),
+                currentUser.getRole().name(),
+                matchProject.getProjectTemplate().getTitle()
+            );
 
             return MatchStatusResponse.matched(
                 match.getId(),
