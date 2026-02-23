@@ -57,6 +57,9 @@ class UserServiceTest {
     @Mock
     private ProjectThemeRepository projectThemeRepository;
 
+    @Mock
+    private EmailNotificationService emailNotificationService;
+
     @InjectMocks
     private UserService userService;
 
@@ -82,7 +85,9 @@ class UserServiceTest {
                 "FRONTEND",
                 testUser.getBio(),
                 testUser.getSkills(),
-                null
+                null,
+                null,
+                false
         );
 
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -116,7 +121,9 @@ class UserServiceTest {
                 "BACKEND",
                 testUser.getBio(),
                 testUser.getSkills(),
-                null
+                null,
+                null,
+                false
         );
 
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -181,7 +188,9 @@ class UserServiceTest {
                 "BACKEND",
                 testUser.getBio(),
                 testUser.getSkills(),
-                null
+                null,
+                null,
+                false
         );
 
         when(userRepository.findByGithubUrl(githubUrl)).thenReturn(Optional.of(testUser));
@@ -218,6 +227,7 @@ class UserServiceTest {
                 "Senior Backend Developer",
                 "FRONTEND",
                 newSkills,
+                null,
                 null
         );
 
@@ -249,6 +259,7 @@ class UserServiceTest {
                 "Developer",
                 null, // No role provided
                 null,
+                null,
                 null
         );
 
@@ -279,6 +290,7 @@ class UserServiceTest {
                 null, // Bio not provided
                 null,
                 null,
+                null,
                 null
         );
 
@@ -307,6 +319,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 "Required Name", // Name is required in DTO validation
                 "New bio text",
+                null,
                 null,
                 null,
                 null
@@ -340,6 +353,7 @@ class UserServiceTest {
                 null,
                 null,
                 newSkills,
+                null,
                 null
         );
 

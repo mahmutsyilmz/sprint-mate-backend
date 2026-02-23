@@ -60,7 +60,9 @@ class UserControllerTest {
                 "FRONTEND",
                 null,
                 new HashSet<>(),
-                null
+                null,
+                null,
+                false
         );
 
         when(userService.findByGithubUrl(anyString())).thenReturn(mockResponse);
@@ -126,7 +128,9 @@ class UserControllerTest {
                 "BACKEND",
                 "Software Developer",
                 new HashSet<>(),
-                null
+                null,
+                null,
+                false
         );
 
         when(userService.findByGithubUrl("https://github.com/testuser")).thenReturn(mockResponse);
@@ -160,7 +164,9 @@ class UserControllerTest {
                 null,
                 false,
                 null,
-                null
+                null,
+                null,
+                false
         );
 
         when(userService.getUserStatus("https://github.com/testuser")).thenReturn(mockStatus);
@@ -185,6 +191,7 @@ class UserControllerTest {
                 "Updated bio",
                 "BACKEND",
                 new HashSet<>(),
+                null,
                 null
         );
 
@@ -197,7 +204,9 @@ class UserControllerTest {
                 "FRONTEND",
                 null,
                 new HashSet<>(),
-                null
+                null,
+                null,
+                false
         );
 
         UserResponse updatedUser = new UserResponse(
@@ -208,7 +217,9 @@ class UserControllerTest {
                 "BACKEND",
                 "Updated bio",
                 new HashSet<>(),
-                null
+                null,
+                null,
+                false
         );
 
         when(userService.findByGithubUrl("https://github.com/testuser")).thenReturn(currentUser);
@@ -245,7 +256,9 @@ class UserControllerTest {
                 null,
                 null,
                 new HashSet<>(),
-                null
+                null,
+                null,
+                false
         );
 
         when(userService.findByGithubUrl(expectedGithubUrl)).thenReturn(mockResponse);
