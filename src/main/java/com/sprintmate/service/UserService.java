@@ -192,7 +192,9 @@ public class UserService {
             user.getId(), MatchStatus.ACTIVE);
 
         if (activeMatchOpt.isEmpty()) {
-            // No active match - return user status without match info
+            // No active match - return user status, including waiting state if applicable
+            boolean waiting = user.getWaitingSince() != null;
+            Integer queuePos = waiting ? getQueuePosition(user) : null;
             return new UserStatusResponse(
                 user.getId(),
                 user.getGithubUrl(),
@@ -202,7 +204,10 @@ public class UserService {
                 user.getBio(),
                 user.getSkills(),
                 false,
-                null
+                null,
+                waiting,
+                user.getWaitingSince(),
+                queuePos
             );
         }
 
@@ -253,8 +258,25 @@ public class UserService {
             user.getBio(),
             user.getSkills(),
             true,
-            activeMatchInfo
+            activeMatchInfo,
+            false,
+            null,
+            null
         );
+    }
+
+    /**
+     * Calculates user's position in the waiting queue.
+     * Counts how many users with the same role joined before this user.
+     */
+    private int getQueuePosition(User user) {
+        if (user.getWaitingSince() == null || user.getRole() == null) {
+            return 0;
+        }
+        return userRepository.countByRoleAndWaitingSinceBefore(
+            user.getRole(),
+            user.getWaitingSince()
+        ) + 1;
     }
 
     /**

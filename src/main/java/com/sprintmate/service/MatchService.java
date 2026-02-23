@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -146,7 +147,7 @@ public class MatchService {
                 userRepository.save(currentUser);
                 log.info("User {} joined the waiting queue at {}", currentUserId, now);
             } else {
-                log.info("User {} is already in queue since {}", currentUserId, currentUser.getWaitingSince());
+                log.debug("User {} is already in queue since {}", currentUserId, currentUser.getWaitingSince());
             }
 
             // Calculate queue position
@@ -187,6 +188,57 @@ public class MatchService {
             userRepository.save(user);
             log.info("User {} left the waiting queue", userId);
         }
+    }
+
+    /**
+     * Returns the current match status for a user without modifying any state.
+     * Used by the frontend polling mechanism to detect when a match is found.
+     *
+     * @param userId The UUID of the user to check
+     * @return MATCHED (with details), WAITING (with queue position), or IDLE
+     */
+    @Transactional(readOnly = true)
+    public MatchStatusResponse getMatchStatus(UUID userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        // Check if user has an active match
+        Optional<Match> activeMatchOpt = matchRepository.findMatchByUserIdAndStatus(userId, MatchStatus.ACTIVE);
+        if (activeMatchOpt.isPresent()) {
+            Match activeMatch = activeMatchOpt.get();
+
+            List<MatchParticipant> participants = matchParticipantRepository.findByMatch(activeMatch);
+            User partner = participants.stream()
+                .map(MatchParticipant::getUser)
+                .filter(u -> !u.getId().equals(userId))
+                .findFirst()
+                .orElse(null);
+
+            Optional<MatchProject> matchProjectOpt = matchProjectRepository.findByMatch(activeMatch);
+            String projectTitle = null;
+            String projectDescription = null;
+            if (matchProjectOpt.isPresent()) {
+                ProjectTemplate template = matchProjectOpt.get().getProjectTemplate();
+                projectTitle = template.getTitle();
+                projectDescription = template.getDescription();
+            }
+
+            return MatchStatusResponse.matched(
+                activeMatch.getId(),
+                activeMatch.getCommunicationLink(),
+                partner != null ? buildPartnerName(partner) : null,
+                partner != null && partner.getRole() != null ? partner.getRole().name() : null,
+                projectTitle,
+                projectDescription
+            );
+        }
+
+        // Check if user is in the waiting queue
+        if (user.getWaitingSince() != null) {
+            return MatchStatusResponse.waiting(user.getWaitingSince(), getQueuePosition(user));
+        }
+
+        return MatchStatusResponse.idle();
     }
 
     /**

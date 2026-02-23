@@ -110,6 +110,40 @@ public class MatchController {
     }
 
     /**
+     * Returns the current match status for the authenticated user without modifying state.
+     *
+     * Business Intent:
+     * Lightweight polling endpoint used by the frontend every 5 seconds.
+     * Separated from POST /find to avoid rate-limit interference during polling.
+     * Returns MATCHED (with details), WAITING (with queue position), or IDLE.
+     *
+     * @param oauth2User The authenticated user from Spring Security context
+     * @return MatchStatusResponse with current status
+     */
+    @GetMapping("/status")
+    @Operation(
+        summary = "Get current match status",
+        description = "Returns the current match status without modifying any state. " +
+                      "Use this for polling while waiting for a match instead of POST /find."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Current match status (MATCHED, WAITING, or IDLE)",
+            content = @Content(schema = @Schema(implementation = MatchStatusResponse.class))
+        ),
+        @ApiResponse(responseCode = "401", description = "User not authenticated", content = @Content)
+    })
+    public ResponseEntity<MatchStatusResponse> getMatchStatus(
+            @AuthenticationPrincipal OAuth2User oauth2User) {
+        String githubLogin = oauth2User.getAttribute("login");
+        String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
+
+        UserResponse currentUser = userService.findByGithubUrl(githubUrl);
+        return ResponseEntity.ok(matchService.getMatchStatus(currentUser.id()));
+    }
+
+    /**
      * Cancels waiting in the queue.
      * 
      * Business Intent:

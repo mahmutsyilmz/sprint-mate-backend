@@ -1,5 +1,6 @@
 package com.sprintmate.dto;
 
+import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
 
@@ -20,6 +21,9 @@ import java.util.UUID;
  * @param skills          User's tech stack / skills
  * @param hasActiveMatch  True if user is currently in an active match
  * @param activeMatch     Active match details (null if no active match)
+ * @param isWaiting       True if user is currently in the matching queue
+ * @param waitingSince    Timestamp when user joined queue (null if not waiting)
+ * @param queuePosition   Position in queue (null if not waiting)
  */
 public record UserStatusResponse(
     UUID id,
@@ -30,7 +34,10 @@ public record UserStatusResponse(
     String bio,
     Set<String> skills,
     boolean hasActiveMatch,
-    ActiveMatchInfo activeMatch
+    ActiveMatchInfo activeMatch,
+    boolean isWaiting,
+    LocalDateTime waitingSince,
+    Integer queuePosition
 ) {
     /**
      * Nested record containing active match details.
