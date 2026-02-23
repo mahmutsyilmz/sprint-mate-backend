@@ -24,6 +24,8 @@ import java.util.UUID;
  * @param isWaiting       True if user is currently in the matching queue
  * @param waitingSince    Timestamp when user joined queue (null if not waiting)
  * @param queuePosition   Position in queue (null if not waiting)
+ * @param email           User's email address (may be null if not yet provided)
+ * @param emailVerified   Whether the user's email has been verified via OTP
  */
 public record UserStatusResponse(
     UUID id,
@@ -37,7 +39,9 @@ public record UserStatusResponse(
     ActiveMatchInfo activeMatch,
     boolean isWaiting,
     LocalDateTime waitingSince,
-    Integer queuePosition
+    Integer queuePosition,
+    String email,
+    boolean emailVerified
 ) {
     /**
      * Nested record containing active match details.

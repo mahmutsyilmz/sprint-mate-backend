@@ -2,9 +2,11 @@ package com.sprintmate.controller;
 
 import com.sprintmate.constant.GitHubConstants;
 import com.sprintmate.dto.RoleSelectionRequest;
+import com.sprintmate.dto.SendVerificationRequest;
 import com.sprintmate.dto.UserResponse;
 import com.sprintmate.dto.UserStatusResponse;
 import com.sprintmate.dto.UserUpdateRequest;
+import com.sprintmate.dto.VerifyOtpRequest;
 import com.sprintmate.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -217,5 +219,75 @@ public class UserController {
         UserResponse updatedUser = userService.updateUserProfile(currentUser.id(), request);
 
         return ResponseEntity.ok(updatedUser);
+    }
+
+    /**
+     * Sends a 6-digit OTP to the provided email address for verification.
+     *
+     * Business Intent:
+     * Used during onboarding and profile email changes. The OTP is valid for 10 minutes.
+     * Frontend should follow up with a call to /verify once the user enters the code.
+     *
+     * @param request    The request body containing the email to verify
+     * @param oauth2User The authenticated user from Spring Security context
+     * @return 200 OK on success
+     */
+    @PostMapping("/me/email/send-verification")
+    @Operation(
+        summary = "Send email verification OTP",
+        description = "Generates a 6-digit OTP and sends it to the provided email address. " +
+                      "The code expires in 10 minutes. Required before the user can join the matching queue."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Verification email sent successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid email format", content = @Content),
+        @ApiResponse(responseCode = "401", description = "User not authenticated", content = @Content)
+    })
+    public ResponseEntity<Void> sendEmailVerification(
+            @Valid @RequestBody SendVerificationRequest request,
+            @AuthenticationPrincipal OAuth2User oauth2User) {
+
+        String githubLogin = oauth2User.getAttribute("login");
+        String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
+        UserResponse currentUser = userService.findByGithubUrl(githubUrl);
+
+        userService.sendEmailVerification(currentUser.id(), request.email());
+
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Verifies the OTP code entered by the user.
+     *
+     * Business Intent:
+     * Completes the email verification flow. If the code matches and is not expired,
+     * the user's email is marked as verified, enabling them to join the matching queue.
+     *
+     * @param request    The request body containing the 6-digit OTP code
+     * @param oauth2User The authenticated user from Spring Security context
+     * @return 200 OK on success
+     */
+    @PostMapping("/me/email/verify")
+    @Operation(
+        summary = "Verify email with OTP",
+        description = "Verifies the 6-digit OTP code. If valid and not expired, " +
+                      "the user's email is marked as verified."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Email verified successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid or expired OTP", content = @Content),
+        @ApiResponse(responseCode = "401", description = "User not authenticated", content = @Content)
+    })
+    public ResponseEntity<Void> verifyEmail(
+            @Valid @RequestBody VerifyOtpRequest request,
+            @AuthenticationPrincipal OAuth2User oauth2User) {
+
+        String githubLogin = oauth2User.getAttribute("login");
+        String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
+        UserResponse currentUser = userService.findByGithubUrl(githubUrl);
+
+        userService.verifyEmail(currentUser.id(), request.otpCode());
+
+        return ResponseEntity.ok().build();
     }
 }

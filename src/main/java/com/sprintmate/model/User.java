@@ -36,11 +36,34 @@ public class User {
     private String githubUrl;
 
     /**
-     * User's email address, fetched from GitHub during OAuth2 login.
-     * Used for match notifications. May be null if GitHub email is unavailable.
+     * User's email address, provided voluntarily during onboarding.
+     * Used for match notifications and OTP delivery.
+     * Null until the user provides it via the email verification flow.
      */
     @Column(name = "email")
     private String email;
+
+    /**
+     * Whether the user's email address has been verified via OTP.
+     * Required before the user can join the matching queue.
+     */
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private boolean emailVerified = false;
+
+    /**
+     * The 6-digit OTP code sent to the user's email for verification.
+     * Cleared after successful verification or when a new code is generated.
+     */
+    @Column(name = "email_verification_code")
+    private String emailVerificationCode;
+
+    /**
+     * Expiry timestamp for the current verification code.
+     * OTP is invalid after this time (10-minute window).
+     */
+    @Column(name = "verification_code_expires_at")
+    private LocalDateTime verificationCodeExpiresAt;
 
     /**
      * User's first name.

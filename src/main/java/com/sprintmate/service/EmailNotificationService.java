@@ -64,6 +64,55 @@ public class EmailNotificationService {
         }
     }
 
+    /**
+     * Sends an email verification OTP to the user.
+     * Runs asynchronously — does NOT block the HTTP response.
+     *
+     * @param toEmail  The email address to verify
+     * @param userName The user's display name (for personalization)
+     * @param otpCode  The 6-digit OTP to include in the email
+     */
+    @Async("emailTaskExecutor")
+    public void sendVerificationEmail(String toEmail, String userName, String otpCode) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("Your Sprint Mate Verification Code");
+            helper.setText(buildVerificationEmailBody(userName, otpCode), true);
+            mailSender.send(message);
+            log.info("Verification email sent to {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send verification email to {}: {}", toEmail, e.getMessage(), e);
+        }
+    }
+
+    private String buildVerificationEmailBody(String userName, String otpCode) {
+        return """
+                <html>
+                <body style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #4F46E5;">🔐 Verify Your Email</h2>
+                  <p>Hi <strong>%s</strong>,</p>
+                  <p>Use the code below to verify your email address on Sprint Mate:</p>
+                  <div style="text-align: center; margin: 32px 0;">
+                    <span style="display: inline-block; background: #F5F3FF; border: 2px solid #4F46E5;
+                                 border-radius: 8px; padding: 16px 32px; font-size: 36px;
+                                 font-weight: bold; letter-spacing: 8px; color: #4F46E5;
+                                 font-family: monospace;">
+                      %s
+                    </span>
+                  </div>
+                  <p>This code expires in <strong>10 minutes</strong>.</p>
+                  <p>If you did not request this, you can safely ignore this email.</p>
+                  <p style="color:#888; font-size:12px; margin-top:32px;">
+                    This email was sent by Sprint Mate.
+                  </p>
+                </body>
+                </html>
+                """.formatted(userName, otpCode);
+    }
+
     private String buildEmailBody(String userName, String partnerName,
                                   String partnerRole, String matchTopic) {
         return """

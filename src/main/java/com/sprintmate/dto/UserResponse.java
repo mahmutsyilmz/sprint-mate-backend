@@ -5,18 +5,21 @@ import java.util.UUID;
 
 /**
  * Response DTO representing user data returned to clients.
- * 
+ *
  * Business Intent:
  * Provides a safe, immutable view of user data without exposing internal entity details.
  * Used for all user-related API responses.
  *
- * @param id        Unique identifier of the user
- * @param githubUrl User's GitHub profile URL
- * @param name      User's display name
- * @param surname   User's surname (may be null)
- * @param role      User's selected role (may be null if not yet selected)
- * @param bio       User's bio/title (may be null)
- * @param skills    User's tech stack / skills (e.g., "Java", "React", "Docker")
+ * @param id            Unique identifier of the user
+ * @param githubUrl     User's GitHub profile URL
+ * @param name          User's display name
+ * @param surname       User's surname (may be null)
+ * @param role          User's selected role (may be null if not yet selected)
+ * @param bio           User's bio/title (may be null)
+ * @param skills        User's tech stack / skills (e.g., "Java", "React", "Docker")
+ * @param preference    User's project preferences (may be null)
+ * @param email         User's email address (may be null if not yet provided)
+ * @param emailVerified Whether the user's email has been verified via OTP
  */
 public record UserResponse(
     UUID id,
@@ -26,5 +29,7 @@ public record UserResponse(
     String role,
     String bio,
     Set<String> skills,
-    UserPreferenceResponse preference
+    UserPreferenceResponse preference,
+    String email,
+    boolean emailVerified
 ) {}

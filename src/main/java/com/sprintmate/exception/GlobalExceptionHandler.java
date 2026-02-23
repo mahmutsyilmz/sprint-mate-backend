@@ -207,6 +207,36 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles EmailNotVerifiedException - returns 400 Bad Request.
+     * Used when a user attempts to match without a verified email address.
+     */
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ApiError> handleEmailNotVerified(EmailNotVerifiedException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "Email Not Verified",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**
+     * Handles InvalidOtpException - returns 400 Bad Request.
+     * Used when an OTP verification code is invalid or has expired.
+     */
+    @ExceptionHandler(InvalidOtpException.class)
+    public ResponseEntity<ApiError> handleInvalidOtp(InvalidOtpException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "Invalid OTP",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**
      * Standard API error response structure.
      * Provides consistent error format across all endpoints.
      */

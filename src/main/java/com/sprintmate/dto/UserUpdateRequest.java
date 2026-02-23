@@ -1,6 +1,7 @@
 package com.sprintmate.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -12,6 +13,8 @@ import java.util.Set;
  *
  * Business Intent:
  * Allows users to update their editable profile fields (name, bio, role, skills, preferences).
+ * If email is provided and differs from the current one, emailVerified is automatically
+ * reset to false on the backend, requiring re-verification.
  * Validates input to ensure data integrity.
  *
  * @param name       User's display name (required, max 100 characters)
@@ -19,6 +22,7 @@ import java.util.Set;
  * @param role       User's role (optional, must be "FRONTEND" or "BACKEND" if provided)
  * @param skills     User's tech stack / skills (optional)
  * @param preference User's project generation preferences (optional)
+ * @param email      User's email address (optional, triggers re-verification if changed)
  */
 public record UserUpdateRequest(
     @NotBlank(message = "Name is required")
@@ -34,5 +38,8 @@ public record UserUpdateRequest(
     Set<String> skills,
 
     @Valid
-    UserPreferenceRequest preference
+    UserPreferenceRequest preference,
+
+    @Email(message = "Must be a valid email address")
+    String email
 ) {}

@@ -35,7 +35,9 @@ public class UserMapper {
             user.getRole() != null ? user.getRole().name() : null,
             user.getBio(),
             user.getSkills() != null ? new HashSet<>(user.getSkills()) : new HashSet<>(),
-            toPreferenceResponse(user.getPreference())
+            toPreferenceResponse(user.getPreference()),
+            user.getEmail(),
+            user.isEmailVerified()
         );
     }
 

@@ -6,6 +6,7 @@ import com.sprintmate.dto.MatchCompletionResponse;
 import com.sprintmate.dto.MatchResponse;
 import com.sprintmate.dto.MatchStatusResponse;
 import com.sprintmate.exception.ActiveMatchExistsException;
+import com.sprintmate.exception.EmailNotVerifiedException;
 import com.sprintmate.exception.IncompleteProfileException;
 import com.sprintmate.exception.ResourceNotFoundException;
 import com.sprintmate.exception.RoleNotSelectedException;
@@ -104,6 +105,11 @@ public class MatchService {
         // Step 2.5: Check if user has a display name (required for partner visibility)
         if (currentUser.getName() == null || currentUser.getName().isBlank()) {
             throw IncompleteProfileException.forUser(currentUserId);
+        }
+
+        // Step 2.7: Check if user has verified their email (required before matching)
+        if (!currentUser.isEmailVerified()) {
+            throw EmailNotVerifiedException.forUser(currentUserId);
         }
 
         // Step 3: Check if user already has an active match
