@@ -60,24 +60,36 @@ public class GroqProjectGenerator implements ProjectGeneratorService {
 
     @Override
     public GeneratedProject generateProject(User frontendUser, User backendUser, String topic) {
-        log.info("Generating project for {} (FE) and {} (BE)",
-                frontendUser.getName(), backendUser.getName());
+        boolean isSameRole = frontendUser.getRole() != null
+                && frontendUser.getRole() == backendUser.getRole();
+
+        log.info("Generating project for {} and {} (sameRole={})",
+                frontendUser.getName(), backendUser.getName(), isSameRole);
 
         try {
             // Select archetype + theme based on user preferences
             ProjectSelectionService.SelectionResult selection =
                     projectSelectionService.select(frontendUser, backendUser);
 
-            // Build modular prompt
-            String systemPrompt = modularPromptBuilder.buildPrompt(
-                    frontendUser.getSkills(),
-                    backendUser.getSkills(),
-                    selection.archetype(),
-                    selection.theme(),
-                    selection.targetComplexity(),
-                    selection.frontendLearningGoals(),
-                    selection.backendLearningGoals()
-            );
+            // Build prompt — use same-role variant when both users share the same role
+            String systemPrompt = isSameRole
+                    ? modularPromptBuilder.buildSameRolePrompt(
+                            frontendUser.getSkills(),
+                            backendUser.getSkills(),
+                            frontendUser.getRole(),
+                            selection.archetype(),
+                            selection.theme(),
+                            selection.targetComplexity(),
+                            selection.frontendLearningGoals(),
+                            selection.backendLearningGoals())
+                    : modularPromptBuilder.buildPrompt(
+                            frontendUser.getSkills(),
+                            backendUser.getSkills(),
+                            selection.archetype(),
+                            selection.theme(),
+                            selection.targetComplexity(),
+                            selection.frontendLearningGoals(),
+                            selection.backendLearningGoals());
 
             String jsonResponse = callGroqApi(systemPrompt);
             ProjectTemplate template = parseGroqResponse(jsonResponse);

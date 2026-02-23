@@ -151,7 +151,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.of(backendUser));
         when(matchRepository.save(any(Match.class))).thenReturn(savedMatch);
         when(projectGeneratorService.generateProject(frontendUser, backendUser, null))
@@ -193,7 +193,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.of(backendUser)); // Found waiting backend user
         when(matchRepository.save(any(Match.class))).thenReturn(savedMatch);
         when(projectGeneratorService.generateProject(frontendUser, backendUser, null))
@@ -207,8 +207,8 @@ class MatchServiceTest {
         assertThat(response.status()).isEqualTo("MATCHED");
         assertThat(response.partnerRole()).isEqualTo("BACKEND");
 
-        // Verify it looked for BACKEND role
-        verify(userRepository).findOldestWaitingByRole("BACKEND", frontendUserId);
+        // Verify it looked for compatible partner
+        verify(userRepository).findOldestWaitingCompatible(null, "FRONTEND", frontendUserId);
     }
 
     @Test
@@ -228,7 +228,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(backendUserId)).thenReturn(Optional.of(backendUser));
         when(matchRepository.existsActiveMatchForUser(backendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("FRONTEND", backendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "BACKEND", backendUserId))
                 .thenReturn(Optional.of(frontendUser)); // Found waiting frontend user
         when(matchRepository.save(any(Match.class))).thenReturn(savedMatch);
         when(projectGeneratorService.generateProject(frontendUser, backendUser, null))
@@ -242,8 +242,8 @@ class MatchServiceTest {
         assertThat(response.status()).isEqualTo("MATCHED");
         assertThat(response.partnerRole()).isEqualTo("FRONTEND");
 
-        // Verify it looked for FRONTEND role
-        verify(userRepository).findOldestWaitingByRole("FRONTEND", backendUserId);
+        // Verify it looked for compatible partner
+        verify(userRepository).findOldestWaitingCompatible(null, "BACKEND", backendUserId);
     }
 
     @Test
@@ -251,7 +251,7 @@ class MatchServiceTest {
         // Arrange
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.empty()); // No partner waiting
 
         // Act
@@ -279,7 +279,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.empty());
 
         // Act
@@ -306,7 +306,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.of(backendUser));
         when(matchRepository.save(any(Match.class))).thenReturn(savedMatch);
         when(projectGeneratorService.generateProject(frontendUser, backendUser, null))
@@ -341,7 +341,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.of(backendUser));
         when(matchRepository.save(any(Match.class))).thenReturn(savedMatch);
         when(projectGeneratorService.generateProject(frontendUser, backendUser, topic))
@@ -349,7 +349,7 @@ class MatchServiceTest {
         when(matchProjectRepository.save(any(MatchProject.class))).thenReturn(matchProject);
 
         // Act
-        MatchStatusResponse response = matchService.findOrQueueMatch(frontendUserId, topic);
+        MatchStatusResponse response = matchService.findOrQueueMatch(frontendUserId, topic, null);
 
         // Assert
         assertThat(response.status()).isEqualTo("MATCHED");
@@ -588,7 +588,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.of(backendUser));
         when(matchRepository.save(any(Match.class))).thenReturn(savedMatch);
         when(projectGeneratorService.generateProject(frontendUser, backendUser, null))
@@ -620,7 +620,7 @@ class MatchServiceTest {
 
         when(userRepository.findById(frontendUserId)).thenReturn(Optional.of(frontendUser));
         when(matchRepository.existsActiveMatchForUser(frontendUserId, MatchStatus.ACTIVE)).thenReturn(false);
-        when(userRepository.findOldestWaitingByRole("BACKEND", frontendUserId))
+        when(userRepository.findOldestWaitingCompatible(null, "FRONTEND", frontendUserId))
                 .thenReturn(Optional.of(backendUser));
         when(matchRepository.save(any(Match.class))).thenReturn(savedMatch);
         when(projectGeneratorService.generateProject(frontendUser, backendUser, null))

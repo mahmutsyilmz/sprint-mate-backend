@@ -94,6 +94,24 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles IncompleteProfileException - returns 400 Bad Request.
+     * Used when a user attempts to match without a required profile field (e.g., name).
+     *
+     * @param ex The exception that was thrown
+     * @return ResponseEntity with error details and 400 status
+     */
+    @ExceptionHandler(IncompleteProfileException.class)
+    public ResponseEntity<ApiError> handleIncompleteProfile(IncompleteProfileException ex) {
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.BAD_REQUEST.value(),
+            "Bad Request",
+            ex.getMessage()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**
      * Handles RoleNotSelectedException - returns 400 Bad Request.
      * Used when a user attempts to match without selecting a role first.
      *

@@ -2,6 +2,7 @@ package com.sprintmate.service;
 
 import com.sprintmate.model.ProjectArchetype;
 import com.sprintmate.model.ProjectTheme;
+import com.sprintmate.model.RoleName;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -44,6 +45,89 @@ public class ModularPromptBuilder {
                 buildConstraintsSection(),
                 buildOutputFormatSection()
         );
+    }
+
+    /**
+     * Builds the AI prompt for a same-role match (both FRONTEND or both BACKEND).
+     * Uses role-specific team and constraint sections instead of the standard mixed-role sections.
+     */
+    public String buildSameRolePrompt(
+            Set<String> user1Skills,
+            Set<String> user2Skills,
+            RoleName commonRole,
+            ProjectArchetype archetype,
+            ProjectTheme theme,
+            int targetComplexity,
+            String learningGoals1,
+            String learningGoals2
+    ) {
+        log.debug("Building same-role prompt: commonRole={}, archetype={}, theme={}, complexity={}",
+                commonRole, archetype.getCode(), theme.getCode(), targetComplexity);
+
+        return String.join("\n\n",
+                buildRoleSection(),
+                buildSameRoleTeamSection(user1Skills, user2Skills, commonRole),
+                buildArchetypeSection(archetype),
+                buildThemeSection(theme),
+                buildComplexitySection(targetComplexity),
+                buildLearningGoalsSection(learningGoals1, learningGoals2),
+                buildSameRoleConstraintsSection(commonRole),
+                buildSameRoleOutputFormatSection(commonRole)
+        );
+    }
+
+    private String buildSameRoleTeamSection(Set<String> s1, Set<String> s2, RoleName role) {
+        String label = role == RoleName.BACKEND ? "Backend" : "Frontend";
+        String skills1 = s1.isEmpty() ? (role == RoleName.BACKEND ? "Java, Spring Boot" : "React, TypeScript") : String.join(", ", s1);
+        String skills2 = s2.isEmpty() ? (role == RoleName.BACKEND ? "Java, Spring Boot" : "React, TypeScript") : String.join(", ", s2);
+
+        return """
+                THE TEAM: Two %s Developers collaborating together.
+                Developer 1 knows: %s
+                Developer 2 knows: %s""".formatted(label, skills1, skills2);
+    }
+
+    private String buildSameRoleConstraintsSection(RoleName role) {
+        String roleSpecific = role == RoleName.BACKEND
+                ? "6. BACKEND-ONLY - No web UI required. Focus on API design, data modeling, CLI tools, or distributed systems. Both developers work on backend tasks divided by domain area."
+                : "6. FRONTEND-ONLY - No backend server required. Use mock data, browser localStorage, or public APIs. Focus on UI/UX, animations, state management, and complex component architecture. Both developers work on frontend tasks.";
+
+        return """
+                DESIGN PRINCIPLES:
+                1. FUN FIRST - The project should be something developers are EXCITED to build
+                2. PORTFOLIO-WORTHY - Something they'd proudly show to recruiters
+                3. ACHIEVABLE - Must be completable in 1 week by 2 people
+                4. MODERN - Use their actual skills, no legacy technologies
+                5. SHARED WORKLOAD - Divide tasks by feature/domain area between the two developers
+                %s
+                7. SPRINT MATE BADGE - The LAST item in backendTasks MUST be exactly: \
+                "Add the Sprint Mate badge to your README.md: \
+                [![Powered by Sprint Mate](https://img.shields.io/badge/Powered%%20by-Sprint%%20Mate%%20AI-4ade80?style=for-the-badge)](https://sprint-mate.vercel.app)"\
+                """.formatted(roleSpecific);
+    }
+
+    private String buildSameRoleOutputFormatSection(RoleName role) {
+        String taskHint = role == RoleName.BACKEND
+                ? "frontendTasks should be [] (empty array). All development tasks go in backendTasks, split between two developers by domain."
+                : "backendTasks should contain only simple mock data setup (e.g., create a JSON mock file). All main development tasks go in frontendTasks.";
+
+        return """
+                OUTPUT FORMAT (Strictly valid JSON, no markdown):
+                IMPORTANT: %s
+                {
+                  "title": "Catchy Project Name",
+                  "description": "2-3 sentence pitch that makes developers excited to build this",
+                  "wowFactor": "What makes this project impressive (1 sentence)",
+                  "frontendTasks": [
+                    "Specific task with technology",
+                    "..."
+                  ],
+                  "backendTasks": [
+                    "Specific task with technology",
+                    "..."
+                  ],
+                  "apiEndpoints": []
+                }""".formatted(taskHint);
     }
 
     private String buildRoleSection() {
@@ -144,7 +228,11 @@ public class ModularPromptBuilder {
                 3. ACHIEVABLE - Must be completable in 1 week by 2 people
                 4. MODERN - Use their actual skills, no legacy technologies
                 5. COLLABORATIVE - Clear separation between frontend and backend work
-                6. REAL VALUE - Something that could actually be used by real people""";
+                6. REAL VALUE - Something that could actually be used by real people
+                7. SPRINT MATE BADGE - The LAST item in backendTasks MUST be exactly: \
+                "Add the Sprint Mate badge to your README.md: \
+                [![Powered by Sprint Mate](https://img.shields.io/badge/Powered%20by-Sprint%20Mate%20AI-4ade80?style=for-the-badge)](https://sprint-mate.vercel.app)"\
+                """;
     }
 
     private String buildOutputFormatSection() {

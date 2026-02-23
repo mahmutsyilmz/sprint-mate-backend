@@ -95,7 +95,9 @@ public class MatchController {
     public ResponseEntity<MatchStatusResponse> findMatch(
             @AuthenticationPrincipal OAuth2User oauth2User,
             @Parameter(description = "Optional project topic (e.g., Fintech, Sports, AI, Healthcare)")
-            @RequestParam(required = false) String topic) {
+            @RequestParam(required = false) String topic,
+            @Parameter(description = "Role desired for partner: FRONTEND, BACKEND, or ANY (default ANY)")
+            @RequestParam(required = false) String targetRole) {
         // Extract GitHub login from OAuth2 user and construct GitHub URL
         String githubLogin = oauth2User.getAttribute("login");
         String githubUrl = GitHubConstants.GITHUB_BASE_URL + githubLogin;
@@ -103,8 +105,8 @@ public class MatchController {
         // Find user by GitHub URL to get their UUID
         UserResponse currentUser = userService.findByGithubUrl(githubUrl);
 
-        // Initiate matching or join queue with optional topic
-        MatchStatusResponse response = matchService.findOrQueueMatch(currentUser.id(), topic);
+        // Initiate matching or join queue with optional topic and target role preference
+        MatchStatusResponse response = matchService.findOrQueueMatch(currentUser.id(), topic, targetRole);
 
         return ResponseEntity.ok(response);
     }

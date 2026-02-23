@@ -6,6 +6,7 @@ import com.sprintmate.dto.MatchCompletionResponse;
 import com.sprintmate.dto.MatchResponse;
 import com.sprintmate.dto.MatchStatusResponse;
 import com.sprintmate.exception.ActiveMatchExistsException;
+import com.sprintmate.exception.IncompleteProfileException;
 import com.sprintmate.exception.ResourceNotFoundException;
 import com.sprintmate.exception.RoleNotSelectedException;
 import com.sprintmate.model.Match;
@@ -61,7 +62,7 @@ public class MatchService {
      */
     @Transactional
     public MatchStatusResponse findOrQueueMatch(UUID currentUserId) {
-        return findOrQueueMatch(currentUserId, null);
+        return findOrQueueMatch(currentUserId, null, null);
     }
 
     /**
@@ -89,7 +90,7 @@ public class MatchService {
      * @throws ActiveMatchExistsException if user already has an active match
      */
     @Transactional
-    public MatchStatusResponse findOrQueueMatch(UUID currentUserId, String topic) {
+    public MatchStatusResponse findOrQueueMatch(UUID currentUserId, String topic, String targetRoleParam) {
         // Step 1: Find the current user
         User currentUser = userRepository.findById(currentUserId)
             .orElseThrow(() -> new ResourceNotFoundException("User", "id", currentUserId));
@@ -99,16 +100,25 @@ public class MatchService {
             throw RoleNotSelectedException.forUser(currentUserId);
         }
 
+        // Step 2.5: Check if user has a display name (required for partner visibility)
+        if (currentUser.getName() == null || currentUser.getName().isBlank()) {
+            throw IncompleteProfileException.forUser(currentUserId);
+        }
+
         // Step 3: Check if user already has an active match
         if (matchRepository.existsActiveMatchForUser(currentUserId, MatchStatus.ACTIVE)) {
             throw ActiveMatchExistsException.forUser(currentUserId);
         }
 
-        // Step 4: Determine the target role (opposite of current user's role)
-        RoleName targetRole = getOppositeRole(currentUser.getRole());
+        // Step 4: Parse desired partner role (null = ANY)
+        RoleName targetRole = parseTargetRole(targetRoleParam);
 
-        // Step 5: Look for oldest waiting partner with target role
-        var partnerOpt = userRepository.findOldestWaitingByRole(targetRole.name(), currentUserId);
+        // Step 5: Look for oldest compatible waiting partner
+        var partnerOpt = userRepository.findOldestWaitingCompatible(
+            targetRole != null ? targetRole.name() : null,
+            currentUser.getRole().name(),
+            currentUserId
+        );
 
         if (partnerOpt.isPresent()) {
             // Partner found! Create match
@@ -120,13 +130,15 @@ public class MatchService {
             createParticipants(match, currentUser, partner);
             MatchProject matchProject = assignProject(match, currentUser, partner, topic);
 
-            // Clear waitingSince for both users (they're now matched)
+            // Clear queue state for both users (they're now matched)
             currentUser.setWaitingSince(null);
+            currentUser.setWaitingForRole(null);
             partner.setWaitingSince(null);
+            partner.setWaitingForRole(null);
             userRepository.save(currentUser);
             userRepository.save(partner);
 
-            log.info("Created match {} between {} and {} with project {}", 
+            log.info("Created match {} between {} and {} with project {}",
                      match.getId(), currentUserId, partner.getId(), matchProject.getProjectTemplate().getTitle());
 
             return MatchStatusResponse.matched(
@@ -140,12 +152,13 @@ public class MatchService {
         } else {
             // No partner available - add to queue
             LocalDateTime now = LocalDateTime.now();
-            
+
             // Check if already waiting
             if (currentUser.getWaitingSince() == null) {
                 currentUser.setWaitingSince(now);
+                currentUser.setWaitingForRole(targetRole);
                 userRepository.save(currentUser);
-                log.info("User {} joined the waiting queue at {}", currentUserId, now);
+                log.info("User {} joined the waiting queue at {} (targetRole={})", currentUserId, now, targetRole);
             } else {
                 log.debug("User {} is already in queue since {}", currentUserId, currentUser.getWaitingSince());
             }
@@ -154,6 +167,20 @@ public class MatchService {
             int queuePosition = getQueuePosition(currentUser);
 
             return MatchStatusResponse.waiting(currentUser.getWaitingSince(), queuePosition);
+        }
+    }
+
+    /**
+     * Parses the targetRole string parameter from the API request.
+     * Returns null (ANY) if the parameter is absent, blank, or "ANY".
+     */
+    private RoleName parseTargetRole(String param) {
+        if (param == null || param.isBlank() || "ANY".equalsIgnoreCase(param)) return null;
+        try {
+            return RoleName.valueOf(param.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid targetRole param '{}', defaulting to ANY", param);
+            return null;
         }
     }
 
@@ -185,6 +212,7 @@ public class MatchService {
         
         if (user.getWaitingSince() != null) {
             user.setWaitingSince(null);
+            user.setWaitingForRole(null);
             userRepository.save(user);
             log.info("User {} left the waiting queue", userId);
         }
@@ -376,14 +404,6 @@ public class MatchService {
             log.warn("Failed to parse JSON array: {}", json);
             return List.of();
         }
-    }
-
-    /**
-     * Gets the opposite role for matching.
-     * Frontend developers are matched with Backend developers and vice versa.
-     */
-    private RoleName getOppositeRole(RoleName role) {
-        return role == RoleName.FRONTEND ? RoleName.BACKEND : RoleName.FRONTEND;
     }
 
     /**

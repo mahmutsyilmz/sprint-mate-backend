@@ -29,35 +29,35 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByGithubUrl(String githubUrl);
 
     /**
-     * Finds the oldest waiting user with the target role who is not in an active match.
-     * Implements FIFO queue - first user to start waiting gets matched first.
+     * Finds the oldest waiting user compatible with the current user's match request.
      *
-     * Logic:
-     * - User must have the specified role (e.g., BACKEND if current user is FRONTEND)
-     * - User must be actively waiting (waiting_since IS NOT NULL)
-     * - User must NOT be participating in any ACTIVE match
-     * - Excludes the current user from results
-     * - Orders by waiting_since ASC (oldest first = FIFO queue)
-     * - Returns only one user (TOP 1)
+     * Compatibility rules:
+     * - If targetRole is specified: partner must have that role
+     * - If targetRole is null (ANY): any role is accepted
+     * - Partner's waitingForRole must be null (ANY) OR equal to the current user's role
+     * - Partner must be actively waiting and not already in an ACTIVE match
      *
-     * @param targetRole The role to search for (opposite of current user's role)
+     * @param targetRole    The role desired for the partner (null = ANY)
+     * @param currentUserRole The current user's own role (used to check partner compatibility)
      * @param excludeUserId The current user's ID to exclude from search
-     * @return Optional containing the oldest waiting User if found, empty otherwise
+     * @return Optional containing the oldest compatible waiting User if found, empty otherwise
      */
-    @Query(value = "SELECT * FROM users u " +
-           "WHERE u.role = :targetRole " +
-           "AND u.id <> CAST(:excludeUserId AS uuid) " +
+    @Query(value = "SELECT TOP 1 * FROM users u " +
+           "WHERE (:targetRole IS NULL OR u.role = :targetRole) " +
+           "AND u.id <> CAST(:excludeUserId AS uniqueidentifier) " +
            "AND u.waiting_since IS NOT NULL " +
+           "AND (u.waiting_for_role IS NULL OR u.waiting_for_role = :currentUserRole) " +
            "AND u.id NOT IN (" +
            "    SELECT mp.user_id FROM match_participants mp " +
            "    JOIN matches m ON m.id = mp.match_id " +
            "    WHERE m.status = 'ACTIVE'" +
            ") " +
-           "ORDER BY u.waiting_since ASC " +
-           "LIMIT 1",
+           "ORDER BY u.waiting_since ASC",
            nativeQuery = true)
-    Optional<User> findOldestWaitingByRole(@Param("targetRole") String targetRole, 
-                                           @Param("excludeUserId") UUID excludeUserId);
+    Optional<User> findOldestWaitingCompatible(
+            @Param("targetRole") String targetRole,
+            @Param("currentUserRole") String currentUserRole,
+            @Param("excludeUserId") UUID excludeUserId);
 
     /**
      * Checks if a user is currently waiting in the queue.

@@ -82,6 +82,15 @@ public class User {
     private LocalDateTime waitingSince;
 
     /**
+     * Role the user wants their match partner to have.
+     * Null means the user accepts any role (ANY).
+     * Set when user joins the queue and cleared on match or cancel.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "waiting_for_role")
+    private RoleName waitingForRole;
+
+    /**
      * User's project generation preferences (themes, difficulty, learning goals).
      * Optional - users without preferences get default behavior.
      */

@@ -73,6 +73,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         String login = oauth2User.getAttribute("login");
         String name = oauth2User.getAttribute("name");
 
+        // Fallback: if GitHub public name is hidden/empty, use the GitHub login username
+        String effectiveName = (name != null && !name.isBlank()) ? name : login;
+
         // Construct GitHub profile URL as unique identifier
         String githubUrl = GitHubConstants.GITHUB_BASE_URL + login;
 
@@ -81,10 +84,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         if (existingUser.isPresent()) {
             // Existing user - update profile info if changed
-            updateExistingUser(existingUser.get(), name);
+            updateExistingUser(existingUser.get(), effectiveName);
         } else {
             // New user - create and persist
-            createNewUser(githubUrl, name);
+            createNewUser(githubUrl, effectiveName);
         }
     }
 
