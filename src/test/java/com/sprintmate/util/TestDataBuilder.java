@@ -30,6 +30,7 @@ public class TestDataBuilder {
                 .name("Test User")
                 .role(role)
                 .skills(new HashSet<>())
+                .emailVerified(true)
                 .build();
     }
 
@@ -49,6 +50,7 @@ public class TestDataBuilder {
                 .name(name)
                 .role(role)
                 .skills(skills != null ? skills : new HashSet<>())
+                .emailVerified(true)
                 .build();
     }
 
