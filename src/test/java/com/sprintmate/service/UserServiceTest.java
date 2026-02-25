@@ -3,6 +3,7 @@ package com.sprintmate.service;
 import com.sprintmate.dto.UserResponse;
 import com.sprintmate.dto.UserStatusResponse;
 import com.sprintmate.dto.UserUpdateRequest;
+import com.sprintmate.exception.InvalidOtpException;
 import com.sprintmate.exception.InvalidRoleException;
 import com.sprintmate.exception.ResourceNotFoundException;
 import com.sprintmate.mapper.UserMapper;
@@ -27,6 +28,7 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -535,5 +537,138 @@ class UserServiceTest {
         // Assert
         assertThat(response.activeMatch()).isNotNull();
         assertThat(response.activeMatch().partnerName()).isEqualTo("John");
+    }
+
+    // ── sendEmailVerification ──────────────────────────────────────────────────
+
+    @Test
+    void should_SaveOtpAndSendEmail_When_SendEmailVerificationCalled() {
+        // Arrange
+        String email = "test@example.com";
+        testUser.setEmailVerified(false);
+
+        when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+        when(userRepository.save(any(User.class))).thenReturn(testUser);
+
+        // Act
+        userService.sendEmailVerification(testUserId, email);
+
+        // Assert — user must be saved with email + OTP fields set
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+
+        User saved = userCaptor.getValue();
+        assertThat(saved.getEmail()).isEqualTo(email);
+        assertThat(saved.isEmailVerified()).isFalse();
+        assertThat(saved.getEmailVerificationCode()).isNotNull().hasSize(6);
+        assertThat(saved.getVerificationCodeExpiresAt()).isAfter(java.time.LocalDateTime.now());
+
+        // Async email notification must be triggered once
+        verify(emailNotificationService).sendVerificationEmail(eq(email), any(), any());
+    }
+
+    @Test
+    void should_ThrowResourceNotFoundException_When_UserNotFoundForSendVerification() {
+        // Arrange
+        UUID unknownId = UUID.randomUUID();
+        when(userRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() -> userService.sendEmailVerification(unknownId, "x@y.com"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("User")
+                .hasMessageContaining(unknownId.toString());
+
+        verify(emailNotificationService, never()).sendVerificationEmail(any(), any(), any());
+    }
+
+    // ── verifyEmail ────────────────────────────────────────────────────────────
+
+    @Test
+    void should_SetEmailVerified_When_OtpCorrectAndNotExpired() {
+        // Arrange
+        String otp = "123456";
+        testUser.setEmailVerificationCode(otp);
+        testUser.setVerificationCodeExpiresAt(java.time.LocalDateTime.now().plusMinutes(5));
+        testUser.setEmailVerified(false);
+
+        when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+        when(userRepository.save(any(User.class))).thenReturn(testUser);
+
+        // Act
+        userService.verifyEmail(testUserId, otp);
+
+        // Assert
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+
+        User saved = userCaptor.getValue();
+        assertThat(saved.isEmailVerified()).isTrue();
+        assertThat(saved.getEmailVerificationCode()).isNull();
+        assertThat(saved.getVerificationCodeExpiresAt()).isNull();
+    }
+
+    @Test
+    void should_ThrowInvalidOtpException_When_OtpWrong() {
+        // Arrange
+        testUser.setEmailVerificationCode("123456");
+        testUser.setVerificationCodeExpiresAt(java.time.LocalDateTime.now().plusMinutes(5));
+
+        when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+
+        // Act & Assert
+        assertThatThrownBy(() -> userService.verifyEmail(testUserId, "999999"))
+                .isInstanceOf(InvalidOtpException.class)
+                .hasMessageContaining("Invalid verification code");
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void should_ThrowInvalidOtpException_When_OtpExpired() {
+        // Arrange
+        String otp = "123456";
+        testUser.setEmailVerificationCode(otp);
+        testUser.setVerificationCodeExpiresAt(java.time.LocalDateTime.now().minusMinutes(1)); // expired
+
+        when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+
+        // Act & Assert
+        assertThatThrownBy(() -> userService.verifyEmail(testUserId, otp))
+                .isInstanceOf(InvalidOtpException.class)
+                .hasMessageContaining("expired");
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void should_ResetEmailVerified_When_EmailChangedDuringProfileUpdate() {
+        // Arrange — user already has a verified email
+        testUser.setEmail("old@example.com");
+        testUser.setEmailVerified(true);
+
+        UserUpdateRequest request = new UserUpdateRequest(
+                "John",
+                null,
+                null,
+                null,
+                null,
+                "new@example.com" // different email
+        );
+
+        when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
+        when(userRepository.save(any(User.class))).thenReturn(testUser);
+        when(userMapper.toResponse(testUser)).thenReturn(mock(UserResponse.class));
+
+        // Act
+        userService.updateUserProfile(testUserId, request);
+
+        // Assert — emailVerified must be reset when email changes
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+
+        User saved = userCaptor.getValue();
+        assertThat(saved.getEmail()).isEqualTo("new@example.com");
+        assertThat(saved.isEmailVerified()).isFalse();
     }
 }
