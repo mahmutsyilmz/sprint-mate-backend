@@ -1,47 +1,50 @@
 package com.sprintmate.service;
 
-import jakarta.mail.internet.MimeMessage;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.List;
+import java.util.Map;
 
 /**
- * Service for sending asynchronous email notifications.
+ * Service for sending asynchronous email notifications via Resend HTTP API.
  *
  * Business Intent:
  * Notifies both matched users immediately after a sprint match is created.
  * All email sending runs on a dedicated thread pool ("emailTaskExecutor") so
- * SMTP latency never delays the HTTP response to the matching request.
+ * API latency never delays the HTTP response to the matching request.
+ *
+ * Uses Resend (https://resend.com) instead of SMTP to avoid port-blocking
+ * issues on cloud platforms like Railway.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class EmailNotificationService {
 
-    private final JavaMailSender mailSender;
+    private static final String RESEND_API_URL = "https://api.resend.com/emails";
 
-    @Value("${app.frontend-url}")
-    private String frontendUrl;
+    private final RestTemplate restTemplate;
+    private final String frontendUrl;
+    private final String resendApiKey;
+    private final String fromEmail;
 
-    @Value("${spring.mail.username}")
-    private String fromEmail;
+    public EmailNotificationService(
+            @Value("${app.frontend-url}") String frontendUrl,
+            @Value("${resend.api-key:}") String resendApiKey,
+            @Value("${resend.from-email:Sprint Mate <onboarding@resend.dev>}") String fromEmail) {
+        this.restTemplate = new RestTemplate();
+        this.frontendUrl = frontendUrl;
+        this.resendApiKey = resendApiKey;
+        this.fromEmail = fromEmail;
+    }
 
     /**
      * Sends a match notification email to one participant.
      * Runs asynchronously on the email thread pool — does NOT block the HTTP response.
-     *
-     * If the recipient has no email address on file (GitHub email was unavailable),
-     * the notification is silently skipped and a warning is logged.
-     *
-     * @param toEmail      Recipient email address (skipped if null/blank)
-     * @param userName     Recipient's display name
-     * @param partnerName  Matched partner's display name
-     * @param partnerRole  Partner's role (FRONTEND / BACKEND)
-     * @param matchTopic   AI-generated project title
      */
     @Async("emailTaskExecutor")
     public void sendMatchNotification(String toEmail, String userName,
@@ -50,14 +53,13 @@ public class EmailNotificationService {
             log.warn("Skipping match notification for user '{}' — email address is unavailable", userName);
             return;
         }
+        if (resendApiKey == null || resendApiKey.isBlank()) {
+            log.warn("Skipping match notification — RESEND_API_KEY is not configured");
+            return;
+        }
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(toEmail);
-            helper.setSubject("🚀 Your Sprint Mate is Ready!");
-            helper.setText(buildEmailBody(userName, partnerName, partnerRole, matchTopic), true);
-            mailSender.send(message);
+            sendEmail(toEmail, "\uD83D\uDE80 Your Sprint Mate is Ready!",
+                    buildEmailBody(userName, partnerName, partnerRole, matchTopic));
             log.info("Match notification sent to {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send match notification to {}: {}", toEmail, e.getMessage(), e);
@@ -67,24 +69,39 @@ public class EmailNotificationService {
     /**
      * Sends an email verification OTP to the user.
      * Runs asynchronously — does NOT block the HTTP response.
-     *
-     * @param toEmail  The email address to verify
-     * @param userName The user's display name (for personalization)
-     * @param otpCode  The 6-digit OTP to include in the email
      */
     @Async("emailTaskExecutor")
     public void sendVerificationEmail(String toEmail, String userName, String otpCode) {
+        if (resendApiKey == null || resendApiKey.isBlank()) {
+            log.warn("Skipping verification email — RESEND_API_KEY is not configured");
+            return;
+        }
         try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromEmail);
-            helper.setTo(toEmail);
-            helper.setSubject("Your Sprint Mate Verification Code");
-            helper.setText(buildVerificationEmailBody(userName, otpCode), true);
-            mailSender.send(message);
+            sendEmail(toEmail, "Your Sprint Mate Verification Code",
+                    buildVerificationEmailBody(userName, otpCode));
             log.info("Verification email sent to {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send verification email to {}: {}", toEmail, e.getMessage(), e);
+        }
+    }
+
+    private void sendEmail(String to, String subject, String html) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(resendApiKey);
+
+        Map<String, Object> body = Map.of(
+                "from", fromEmail,
+                "to", List.of(to),
+                "subject", subject,
+                "html", html
+        );
+
+        HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+        ResponseEntity<String> response = restTemplate.postForEntity(RESEND_API_URL, request, String.class);
+
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new RuntimeException("Resend API returned " + response.getStatusCode() + ": " + response.getBody());
         }
     }
 
