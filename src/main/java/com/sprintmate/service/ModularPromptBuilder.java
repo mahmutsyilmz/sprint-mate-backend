@@ -100,9 +100,6 @@ public class ModularPromptBuilder {
                 4. MODERN - Use their actual skills, no legacy technologies
                 5. SHARED WORKLOAD - Divide tasks by feature/domain area between the two developers
                 %s
-                7. SPRINT MATE BADGE - The LAST item in backendTasks MUST be exactly: \
-                "Add the Sprint Mate badge to your README.md: \
-                [![Powered by Sprint Mate](https://img.shields.io/badge/Powered%%20by-Sprint%%20Mate%%20AI-4ade80?style=for-the-badge)](https://sprint-mate.vercel.app)"\
                 """.formatted(roleSpecific);
     }
 
@@ -229,9 +226,6 @@ public class ModularPromptBuilder {
                 4. MODERN - Use their actual skills, no legacy technologies
                 5. COLLABORATIVE - Clear separation between frontend and backend work
                 6. REAL VALUE - Something that could actually be used by real people
-                7. SPRINT MATE BADGE - The LAST item in backendTasks MUST be exactly: \
-                "Add the Sprint Mate badge to your README.md: \
-                [![Powered by Sprint Mate](https://img.shields.io/badge/Powered%20by-Sprint%20Mate%20AI-4ade80?style=for-the-badge)](https://sprint-mate.vercel.app)"\
                 """;
     }
 

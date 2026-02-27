@@ -223,7 +223,6 @@ public class SprintReviewService {
             3. Is there evidence of compliance considerations?
             4. Does the solution meet the success metrics?
             5. Is the documentation clear and professional?
-            6. Does the README include the Sprint Mate badge ([![Powered by Sprint Mate](https://img.shields.io/badge/Powered%20by-Sprint%20Mate%20AI-4ade80?style=for-the-badge)](https://sprint-mate.vercel.app))? If yes, add 5 bonus points to the score for proper attribution and community contribution.
 
             Return ONLY valid JSON (no markdown, no code blocks):
             {
