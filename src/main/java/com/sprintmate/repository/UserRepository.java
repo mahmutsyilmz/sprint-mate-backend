@@ -42,9 +42,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * @param excludeUserId The current user's ID to exclude from search
      * @return Optional containing the oldest compatible waiting User if found, empty otherwise
      */
-    @Query(value = "SELECT TOP 1 * FROM users u " +
+    @Query(value = "SELECT * FROM users u " +
            "WHERE (:targetRole IS NULL OR u.role = :targetRole) " +
-           "AND u.id <> CAST(:excludeUserId AS uniqueidentifier) " +
+           "AND u.id <> CAST(:excludeUserId AS uuid) " +
            "AND u.waiting_since IS NOT NULL " +
            "AND (u.waiting_for_role IS NULL OR u.waiting_for_role = :currentUserRole) " +
            "AND u.id NOT IN (" +
@@ -52,7 +52,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
            "    JOIN matches m ON m.id = mp.match_id " +
            "    WHERE m.status = 'ACTIVE'" +
            ") " +
-           "ORDER BY u.waiting_since ASC",
+           "ORDER BY u.waiting_since ASC " +
+           "LIMIT 1",
            nativeQuery = true)
     Optional<User> findOldestWaitingCompatible(
             @Param("targetRole") String targetRole,
