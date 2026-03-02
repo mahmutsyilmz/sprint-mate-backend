@@ -35,7 +35,8 @@ public record UserUpdateRequest(
     @Pattern(regexp = "^(FRONTEND|BACKEND)$", message = "Role must be either FRONTEND or BACKEND")
     String role,
 
-    Set<String> skills,
+    @Size(max = 20, message = "Cannot have more than 20 skills")
+    Set<@Size(max = 50, message = "Each skill must be at most 50 characters") String> skills,
 
     @Valid
     UserPreferenceRequest preference,

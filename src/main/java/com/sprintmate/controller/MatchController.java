@@ -15,12 +15,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -36,6 +38,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/matches")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Matches", description = "Developer matching endpoints")
 public class MatchController {
 
@@ -95,7 +98,7 @@ public class MatchController {
     public ResponseEntity<MatchStatusResponse> findMatch(
             @AuthenticationPrincipal OAuth2User oauth2User,
             @Parameter(description = "Optional project topic (e.g., Fintech, Sports, AI, Healthcare)")
-            @RequestParam(required = false) String topic,
+            @RequestParam(required = false) @Size(max = 100, message = "Topic must be at most 100 characters") String topic,
             @Parameter(description = "Role desired for partner: FRONTEND, BACKEND, or ANY (default ANY)")
             @RequestParam(required = false) String targetRole) {
         // Extract GitHub login from OAuth2 user and construct GitHub URL

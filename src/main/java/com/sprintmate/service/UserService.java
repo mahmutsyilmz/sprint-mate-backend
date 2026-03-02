@@ -20,10 +20,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -47,6 +51,8 @@ public class UserService {
     private final UserPreferenceRepository userPreferenceRepository;
     private final ProjectThemeRepository projectThemeRepository;
     private final EmailNotificationService emailNotificationService;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     /**
      * Updates the role of a user.
@@ -169,18 +175,18 @@ public class UserService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        String otp = String.format("%06d", new Random().nextInt(1_000_000));
+        String otp = String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
 
         user.setEmail(email);
         user.setEmailVerified(false);
-        user.setEmailVerificationCode(otp);
+        user.setEmailVerificationCode(hashOtp(otp));
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(10));
 
         userRepository.save(user);
 
         emailNotificationService.sendVerificationEmail(email, user.getName(), otp);
 
-        log.info("Sent verification code to {} for user {}", email, userId);
+        log.info("Sent verification code for user {}", userId);
     }
 
     /**
@@ -200,7 +206,7 @@ public class UserService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        if (user.getEmailVerificationCode() == null || !user.getEmailVerificationCode().equals(otpCode)) {
+        if (user.getEmailVerificationCode() == null || !user.getEmailVerificationCode().equals(hashOtp(otpCode))) {
             throw new InvalidOtpException("Invalid verification code");
         }
 
@@ -352,5 +358,15 @@ public class UserService {
             return partner.getName() + " " + partner.getSurname();
         }
         return partner.getName();
+    }
+
+    private String hashOtp(String otp) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(otp.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
     }
 }

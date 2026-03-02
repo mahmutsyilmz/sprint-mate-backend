@@ -12,6 +12,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import org.springframework.scheduling.annotation.Scheduled;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,10 +33,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final int GENERAL_LIMIT = 60;
     private static final int MATCH_LIMIT = 10;
+    private static final int OTP_SEND_LIMIT = 3;
+    private static final int OTP_VERIFY_LIMIT = 10;
     private static final long WINDOW_MS = 60_000; // 1 minute
 
     private final Map<String, RateWindow> generalWindows = new ConcurrentHashMap<>();
     private final Map<String, RateWindow> matchWindows = new ConcurrentHashMap<>();
+    private final Map<String, RateWindow> otpSendWindows = new ConcurrentHashMap<>();
+    private final Map<String, RateWindow> otpVerifyWindows = new ConcurrentHashMap<>();
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -51,6 +57,26 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         String clientKey = resolveClientKey(request);
+
+        // Check OTP send rate limit (3 per minute)
+        if ("POST".equalsIgnoreCase(request.getMethod())
+                && requestUri.equals("/api/users/me/email/send-verification")) {
+            if (!isAllowed(otpSendWindows, clientKey, OTP_SEND_LIMIT)) {
+                log.warn("OTP send rate limit exceeded for client {}", clientKey);
+                sendTooManyRequests(response);
+                return;
+            }
+        }
+
+        // Check OTP verify rate limit (10 per minute)
+        if ("POST".equalsIgnoreCase(request.getMethod())
+                && requestUri.equals("/api/users/me/email/verify")) {
+            if (!isAllowed(otpVerifyWindows, clientKey, OTP_VERIFY_LIMIT)) {
+                log.warn("OTP verify rate limit exceeded for client {}", clientKey);
+                sendTooManyRequests(response);
+                return;
+            }
+        }
 
         // Check match-specific rate limit
         if ("POST".equalsIgnoreCase(request.getMethod())
@@ -106,6 +132,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "{\"timestamp\":\"%s\",\"status\":429,\"error\":\"Too Many Requests\",\"message\":\"Rate limit exceeded. Please try again later.\"}"
                 .formatted(java.time.LocalDateTime.now())
         );
+    }
+
+    /**
+     * Evicts expired rate limit windows every 2 minutes to prevent memory leak.
+     */
+    @Scheduled(fixedDelay = 120_000)
+    public void evictExpiredWindows() {
+        long now = System.currentTimeMillis();
+        generalWindows.entrySet().removeIf(e -> now - e.getValue().startTime() > WINDOW_MS);
+        matchWindows.entrySet().removeIf(e -> now - e.getValue().startTime() > WINDOW_MS);
+        otpSendWindows.entrySet().removeIf(e -> now - e.getValue().startTime() > WINDOW_MS);
+        otpVerifyWindows.entrySet().removeIf(e -> now - e.getValue().startTime() > WINDOW_MS);
     }
 
     private record RateWindow(long startTime, AtomicInteger count) {}

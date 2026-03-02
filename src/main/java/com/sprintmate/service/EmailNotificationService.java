@@ -60,9 +60,9 @@ public class EmailNotificationService {
         try {
             sendEmail(toEmail, "\uD83D\uDE80 Your Sprint Mate is Ready!",
                     buildEmailBody(userName, partnerName, partnerRole, matchTopic));
-            log.info("Match notification sent to {}", toEmail);
+            log.info("Match notification sent to user '{}'", userName);
         } catch (Exception e) {
-            log.error("Failed to send match notification to {}: {}", toEmail, e.getMessage(), e);
+            log.error("Failed to send match notification to user '{}': {}", userName, e.getMessage(), e);
         }
     }
 
@@ -79,9 +79,9 @@ public class EmailNotificationService {
         try {
             sendEmail(toEmail, "Your Sprint Mate Verification Code",
                     buildVerificationEmailBody(userName, otpCode));
-            log.info("Verification email sent to {}", toEmail);
+            log.info("Verification email sent to user '{}'", userName);
         } catch (Exception e) {
-            log.error("Failed to send verification email to {}: {}", toEmail, e.getMessage(), e);
+            log.error("Failed to send verification email to user '{}': {}", userName, e.getMessage(), e);
         }
     }
 

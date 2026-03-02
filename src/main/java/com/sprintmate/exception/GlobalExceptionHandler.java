@@ -6,6 +6,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -13,12 +14,13 @@ import java.util.Map;
 
 /**
  * Global exception handler for the application.
- * 
+ *
  * Business Intent:
  * Provides consistent error responses across all endpoints.
  * Maps domain exceptions to appropriate HTTP status codes.
  */
 @ControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     /**
@@ -156,11 +158,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
+        log.warn("IllegalStateException: {}", ex.getMessage());
         var error = new ApiError(
             LocalDateTime.now(),
             HttpStatus.BAD_REQUEST.value(),
             "Bad Request",
-            ex.getMessage()
+            "The operation could not be completed due to the current state."
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
@@ -234,6 +237,22 @@ public class GlobalExceptionHandler {
             ex.getMessage()
         );
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    /**
+     * Catch-all handler for any unhandled exception.
+     * Logs the full exception internally but returns a safe, generic message to the client.
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiError> handleUnexpected(Exception ex) {
+        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+        var error = new ApiError(
+            LocalDateTime.now(),
+            HttpStatus.INTERNAL_SERVER_ERROR.value(),
+            "Internal Server Error",
+            "An unexpected error occurred. Please try again later."
+        );
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
 
     /**

@@ -20,8 +20,8 @@ public record MatchCompletionRequest(
         nullable = true
     )
     @Pattern(
-        regexp = "^$|^https?://.*",
-        message = "githubRepoUrl must be a valid URL starting with http:// or https://"
+        regexp = "^$|^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/.*)?$",
+        message = "githubRepoUrl must be a valid GitHub repository URL (https://github.com/owner/repo)"
     )
     String githubRepoUrl
 ) {

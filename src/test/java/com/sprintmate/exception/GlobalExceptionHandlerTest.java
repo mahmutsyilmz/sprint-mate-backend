@@ -147,7 +147,7 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().status()).isEqualTo(400);
-        assertThat(response.getBody().message()).contains("not in ACTIVE state");
+        assertThat(response.getBody().message()).isEqualTo("The operation could not be completed due to the current state.");
     }
 
     @Test
@@ -241,17 +241,18 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void should_PreserveOriginalMessage_When_ExceptionHandled() {
-        // Arrange
-        String originalMessage = "Custom error message for testing";
-        IllegalStateException exception = new IllegalStateException(originalMessage);
+    void should_ReturnGenericMessage_When_IllegalStateExceptionHandled() {
+        // Arrange — internal message should NOT leak to client
+        String internalMessage = "Match abc123 cannot be completed. Current status: EXPIRED";
+        IllegalStateException exception = new IllegalStateException(internalMessage);
 
         // Act
         ResponseEntity<GlobalExceptionHandler.ApiError> response =
                 exceptionHandler.handleIllegalState(exception);
 
-        // Assert
+        // Assert — generic message returned, internal details hidden
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().message()).isEqualTo(originalMessage);
+        assertThat(response.getBody().message()).doesNotContain("abc123");
+        assertThat(response.getBody().message()).isEqualTo("The operation could not be completed due to the current state.");
     }
 }

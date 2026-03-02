@@ -98,7 +98,7 @@ public class ChatService {
             throw new AccessDeniedException("You are not a participant in this match");
         }
 
-        int effectiveLimit = limit > 0 ? limit : DEFAULT_HISTORY_LIMIT;
+        int effectiveLimit = Math.min(limit > 0 ? limit : DEFAULT_HISTORY_LIMIT, 500);
 
         // Get messages in descending order, then reverse for chronological display
         List<ChatMessage> messages = chatMessageRepository

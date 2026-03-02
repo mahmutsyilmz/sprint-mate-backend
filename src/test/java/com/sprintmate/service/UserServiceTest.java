@@ -23,6 +23,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -560,7 +562,7 @@ class UserServiceTest {
         User saved = userCaptor.getValue();
         assertThat(saved.getEmail()).isEqualTo(email);
         assertThat(saved.isEmailVerified()).isFalse();
-        assertThat(saved.getEmailVerificationCode()).isNotNull().hasSize(6);
+        assertThat(saved.getEmailVerificationCode()).isNotNull().hasSize(64); // SHA-256 hash
         assertThat(saved.getVerificationCodeExpiresAt()).isAfter(java.time.LocalDateTime.now());
 
         // Async email notification must be triggered once
@@ -588,7 +590,7 @@ class UserServiceTest {
     void should_SetEmailVerified_When_OtpCorrectAndNotExpired() {
         // Arrange
         String otp = "123456";
-        testUser.setEmailVerificationCode(otp);
+        testUser.setEmailVerificationCode(sha256Hex(otp));
         testUser.setVerificationCodeExpiresAt(java.time.LocalDateTime.now().plusMinutes(5));
         testUser.setEmailVerified(false);
 
@@ -611,7 +613,7 @@ class UserServiceTest {
     @Test
     void should_ThrowInvalidOtpException_When_OtpWrong() {
         // Arrange
-        testUser.setEmailVerificationCode("123456");
+        testUser.setEmailVerificationCode(sha256Hex("123456"));
         testUser.setVerificationCodeExpiresAt(java.time.LocalDateTime.now().plusMinutes(5));
 
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -628,7 +630,7 @@ class UserServiceTest {
     void should_ThrowInvalidOtpException_When_OtpExpired() {
         // Arrange
         String otp = "123456";
-        testUser.setEmailVerificationCode(otp);
+        testUser.setEmailVerificationCode(sha256Hex(otp));
         testUser.setVerificationCodeExpiresAt(java.time.LocalDateTime.now().minusMinutes(1)); // expired
 
         when(userRepository.findById(testUserId)).thenReturn(Optional.of(testUser));
@@ -670,5 +672,18 @@ class UserServiceTest {
         User saved = userCaptor.getValue();
         assertThat(saved.getEmail()).isEqualTo("new@example.com");
         assertThat(saved.isEmailVerified()).isFalse();
+    }
+
+    /**
+     * Test helper — mirrors UserService.hashOtp() for setting up test fixtures.
+     */
+    private String sha256Hex(String input) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

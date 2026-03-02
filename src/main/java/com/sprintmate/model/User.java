@@ -55,7 +55,7 @@ public class User {
      * The 6-digit OTP code sent to the user's email for verification.
      * Cleared after successful verification or when a new code is generated.
      */
-    @Column(name = "email_verification_code")
+    @Column(name = "email_verification_code", length = 64)
     private String emailVerificationCode;
 
     /**

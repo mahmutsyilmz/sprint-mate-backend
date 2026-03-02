@@ -2,7 +2,7 @@
 
 A Spring Boot backend for matching frontend and backend developers to build AI-generated collaborative sprint projects.
 
-**Last Updated:** 2026-02-22
+**Last Updated:** 2026-02-27
 
 ---
 
@@ -24,6 +24,8 @@ A Spring Boot backend for matching frontend and backend developers to build AI-g
 - **Real-time WebSocket Chat** — STOMP protocol over WebSocket (`/ws`), messages persisted to DB
 - **Sprint Completion** — Participants mark sprint done with optional repository URL
 - **AI Sprint Review** — Groq fetches GitHub README and scores project 0–100 with strengths/missing elements
+- **OTP Email Verification** — 6-digit OTP code via Resend HTTP API (10 min validity); required before joining matching queue
+- **Email Notifications** — Match notifications and OTP emails via Resend API (`noreply@sprintmate.dev`); asynchronous send with `@Async("emailTaskExecutor")`
 - **Session Persistence** — `/api/users/me/status` restores active match state on page refresh
 - **API Documentation** — Swagger UI (development profile only)
 - **Rate Limiting** — `RateLimitFilter` protects AI endpoints
@@ -50,6 +52,7 @@ A Spring Boot backend for matching frontend and backend developers to build AI-g
 | Flyway | — | Database migrations |
 | Spring WebSocket + STOMP | — | Real-time chat |
 | Groq API (Llama-3.3-70b-versatile) | — | AI project generation & sprint review |
+| Resend HTTP API | — | Transactional email (OTP + match notifications) |
 | Spring Retry + Spring AOP | — | Retry on rate limit (429) |
 | SpringDoc OpenAPI | 2.3.0 | Swagger UI |
 | Lombok | — | Boilerplate reduction |
@@ -69,7 +72,8 @@ src/main/java/com/sprintmate/
 │   ├── WebSocketConfig.java            # STOMP endpoint registration (/ws, /ws-sockjs)
 │   ├── WebSocketSecurityConfig.java    # WebSocket session authentication
 │   ├── OpenApiConfig.java              # Swagger/SpringDoc configuration
-│   ├── RestClientConfig.java           # REST client for Groq/GitHub APIs
+│   ├── RestClientConfig.java           # REST client for Groq/GitHub/Resend APIs
+│   ├── AsyncConfig.java                # @Async thread pool for email tasks
 │   ├── RateLimitFilter.java            # API rate limiting
 │   ├── DataInitializer.java            # Seed data on startup
 │   ├── ProjectIdeaInitializer.java     # Project ideas seed data
@@ -88,6 +92,8 @@ src/main/java/com/sprintmate/
 │   ├── UserPreferenceRequest.java
 │   ├── UserPreferenceResponse.java
 │   ├── RoleSelectionRequest.java
+│   ├── SendVerificationRequest.java    # Email OTP send request
+│   ├── VerifyOtpRequest.java           # Email OTP verification request
 │   ├── MatchStatusResponse.java        # MATCHED / WAITING response
 │   ├── MatchResponse.java
 │   ├── MatchCompletionRequest.java
@@ -96,7 +102,7 @@ src/main/java/com/sprintmate/
 │   ├── ProjectThemeResponse.java
 │   ├── ChatMessageRequest.java
 │   └── ChatMessageResponse.java
-├── entity/
+├── model/
 │   ├── User.java                       # UUID PK, skills (ElementCollection)
 │   ├── Match.java                      # UUID PK, status, created_at
 │   ├── MatchParticipant.java           # User ↔ Match join
@@ -119,6 +125,9 @@ src/main/java/com/sprintmate/
 │   ├── RoleNotSelectedException.java   # 400 — user hasn't selected role
 │   ├── ActiveMatchExistsException.java # 409 — user already in active match
 │   ├── InvalidRoleException.java       # 400 — invalid role name
+│   ├── IncompleteProfileException.java # 400 — incomplete profile
+│   ├── EmailNotVerifiedException.java  # 403 — email not verified
+│   ├── InvalidOtpException.java        # 400 — invalid/expired OTP
 │   ├── NoPartnerAvailableException.java # 200 WAITING — no partner found
 │   └── ReadmeNotFoundException.java   # 404 — GitHub README not found
 ├── mapper/
@@ -141,13 +150,14 @@ src/main/java/com/sprintmate/
 │   ├── UserPreferenceRepository.java
 │   └── ChatMessageRepository.java
 └── service/
-    ├── UserService.java                # Profile management, role updates, status
+    ├── UserService.java                # Profile management, role updates, OTP verification
     ├── MatchService.java               # FIFO matching algorithm, queue, completion
     ├── ProjectService.java             # Project template management
     ├── ProjectGeneratorService.java    # AI generator interface
     ├── GroqProjectGenerator.java       # Groq/Llama implementation with retry
     ├── ProjectSelectionService.java    # Archetype & theme selection from prefs
     ├── ModularPromptBuilder.java       # Prompt assembly for Groq
+    ├── EmailNotificationService.java   # OTP + match notifications via Resend
     ├── ChatService.java                # Message persistence, history
     ├── SprintReviewService.java        # AI code review via GitHub README
     ├── CustomOAuth2UserService.java    # GitHub user upsert on login
@@ -189,7 +199,7 @@ cd sprint-mate-backend
 GITHUB_CLIENT_ID=your-github-client-id
 GITHUB_CLIENT_SECRET=your-github-client-secret
 GROQ_API_KEY=your-groq-api-key
-CLARIFAI_API_KEY=your-clarifai-api-key
+RESEND_API_KEY=your-resend-api-key
 
 # PostgreSQL (defaults to localhost:5432/sprintmate if not set)
 DB_URL=jdbc:postgresql://localhost:5432/sprintmate
@@ -237,6 +247,8 @@ DB_PASSWORD=your-password
 | PATCH | `/api/users/me/role` | Set role (FRONTEND / BACKEND) |
 | PUT | `/api/users/me` | Update profile (name, bio, skills) |
 | PUT | `/api/users/me/preferences` | Update project preferences |
+| POST | `/api/users/me/email/send-verification` | Send 6-digit OTP to email (valid 10 min) |
+| POST | `/api/users/me/email/verify` | Verify OTP code and mark email as verified |
 
 ### Matches
 | Method | Endpoint | Description |
@@ -285,7 +297,12 @@ SYSTEM ARCHITECTURE
    |  - ProjectController |      |  GitHub API (External)   |
    |  - ChatController    |----->|  - README fetch          |
    |                      |      |  - OAuth2 token exchange |
-   |  Services (11)       |      +--------------------------+
+   |                      |      +--------------------------+
+   |  Services (12)       |      +--------------------------+
+   |                      |      |  Resend HTTP API         |
+   |                      |      |  - OTP emails            |
+   |                      |----->|  - Match notifications   |
+   |                      |      +--------------------------+
    |  - UserService       |
    |  - MatchService      |
    |  - GroqProjectGen.   |
@@ -642,7 +659,7 @@ All tests use JUnit 5 + Mockito + AssertJ. Naming convention: `should_ExpectedBe
 | `GITHUB_CLIENT_ID` | Yes | GitHub OAuth App Client ID |
 | `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App Client Secret |
 | `GROQ_API_KEY` | Yes | Groq API key for AI features |
-| `CLARIFAI_API_KEY` | Yes | Clarifai API key (primary AI) |
+| `RESEND_API_KEY` | Yes | Resend HTTP API key for email (OTP + notifications) |
 | `DB_URL` | Production | PostgreSQL JDBC URL |
 | `DB_USERNAME` | Production | Database username |
 | `DB_PASSWORD` | Production | Database password |
